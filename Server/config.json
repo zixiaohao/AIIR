@@ -1,0 +1,126 @@
+{
+  "server": {
+    "port": 8000,
+    "host": "0.0.0.0"
+  },
+  "ai_models": {
+    "default": "deepseek",
+    "full_analysis_model": "mimo-v2-pro",
+    "models": {
+      "deepseek": {
+        "name": "DeepSeek",
+        "api_url": "https://api.deepseek.com/chat/completions",
+        "api_key": "",
+        "model_name": "deepseek-chat",
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "enabled": true
+      },
+      "openai": {
+        "name": "OpenAI GPT-4",
+        "api_url": "https://api.openai.com/v1/chat/completions",
+        "api_key": "",
+        "model_name": "gpt-4",
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "enabled": false
+      },
+      "claude": {
+        "name": "Claude",
+        "api_url": "https://api.anthropic.com/v1/messages",
+        "api_key": "",
+        "model_name": "claude-3-sonnet-20240229",
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "enabled": false
+      },
+      "zhipu": {
+        "name": "智谱GLM-4",
+        "api_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        "api_key": "",
+        "model_name": "glm-4",
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "enabled": false
+      },
+      "moonshot": {
+        "name": "Moonshot (Kimi)",
+        "api_url": "https://api.moonshot.cn/v1/chat/completions",
+        "api_key": "",
+        "model_name": "moonshot-v1-8k",
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "enabled": false
+      },
+      "qwen": {
+        "name": "通义千问",
+        "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+        "api_key": "",
+        "model_name": "qwen-turbo",
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "enabled": false
+      },
+      "custom": {
+        "name": "自定义OPENAI兼容接口",
+        "api_url": "http://localhost:8000/v1/chat/completions",
+        "api_key": "",
+        "model_name": "custom-model",
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "enabled": false
+      },
+      "xiaomi-mimo-pro": {
+        "name": "mimo-v2-pro",
+        "api_url": "https://api.xiaomimimo.com/v1/chat/completions",
+        "api_key": "",
+        "model_name": "mimo-v2-pro",
+        "temperature": 0.3,
+        "max_tokens": 131072,
+        "enabled": false
+      },
+      "minimax": {
+        "name": "MiniMax-M2.7",
+        "api_url": "https://api.minimaxi.com/v1/chat/completions",
+        "api_key": "",
+        "model_name": "MiniMax-M2.7",
+        "temperature": 0.5,
+        "max_tokens": 131072,
+        "enabled": true
+      }
+    }
+  },
+  "object_storage": {
+    "endpoint": "",
+    "access_key": "",
+    "secret_key_encrypted": "",
+    "bucket": "",
+    "prefix": "results/"
+  },
+  "analysis": {
+    "enable_whitelist": true,
+    "whitelist_keywords": [
+      "system_check",
+      "linux_check-AI.sh",
+      "client.sh",
+      "busybox",
+      "vuln",
+      "titan agent",
+      "security-agent",
+      "cloud-monitor",
+      "hostguard",
+      "win_client.exe",
+      "windows_check.exe",
+      "main.go"
+    ]
+  },
+  "rate_limit": {
+    "enabled": true,
+    "max_requests_per_ip": 10,
+    "time_window_hours": 2
+  },
+  "ip_blacklist": {
+    "enabled": true,
+    "blocked_ips": []
+  }
+}
