@@ -61,7 +61,7 @@ jobs:
       - name: Build windowsclient_gaint
         working-directory: ./windowsclient_gaint
         run: |
-          go build -ldflags "-s -w" -o ../dist/windows_check_gaint.exe .
+          go build -ldflags "-s -w" -o ../dist/windows_check_gaint.exe main_gaint.go
 
       - name: Upload windowsclient_gaint artifact
         uses: actions/upload-artifact@v4
