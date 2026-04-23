@@ -228,7 +228,7 @@ docker-compose logs -f
 
 ## ⚙️ 自动构建（CI/CD）
 
-本项目使用 **GitHub Actions** 自动构建Windows客户端。
+本项目使用 **GitHub Actions** 自动构建Windows客户端，无需手动配置编译环境。
 
 ### 触发条件
 
@@ -240,7 +240,7 @@ docker-compose logs -f
 
 每次构建成功后会自动创建 Release，包含：
 - `windows_check.exe` — 标准版Windows客户端
-- `windows_check_gaint.exe` — 增强版Windows客户端
+- `windows_check_gaint.exe`  增强版Windows客户端
 
 **下载地址**：https://github.com/zixiaohao/AIIR/releases
 
@@ -249,12 +249,127 @@ docker-compose logs -f
 ```yaml
 构建流程：
 1. 检出代码
-2. 安装 Go 1.24.1
+2. 安装 Go 1.24.1（通过 Docker/macos-latest）
 3. 编译 winClient → windows_check.exe
 4. 编译 windowsclient_gaint → windows_check_gaint.exe
 5. 上传到Artifacts
 6. 创建GitHub Release（仅main分支push时）
 ```
+
+### 本地Docker方式自动编译
+
+如果你希望在本地使用Docker自动编译Windows客户端，可以使用以下方法：
+
+#### 方法一：使用 Go Docker 镜像交叉编译
+
+```bash
+# 编译 Windows 客户端（标准版）
+docker run --rm \
+  -v "$(pwd)/winClient:/app" \
+  -w /app \
+  golang:1.24.1 \
+  sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o windows_check.exe main.go"
+
+# 编译 Windows 增强客户端
+docker run --rm \
+  -v "$(pwd)/windowsclient_gaint:/app" \
+  -w /app \
+  golang:1.24.1 \
+  sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o windows_check_gaint.exe main_gaint.go"
+```
+
+#### 方法二：使用 Makefile 批量编译
+
+创建 `Makefile` 文件：
+
+```makefile
+.PHONY: all build clean
+
+all: build
+
+build: build-client build-gaint
+
+build-client:
+	@echo "编译 Windows 标准版客户端..."
+	docker run --rm \
+	  -v "$(shell pwd)/winClient:/app" \
+	  -w /app \
+	  golang:1.24.1 \
+	  sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o windows_check.exe main.go"
+	@echo "完成: winClient/windows_check.exe"
+
+build-gaint:
+	@echo "编译 Windows 增强版客户端..."
+	docker run --rm \
+	  -v "$(shell pwd)/windowsclient_gaint:/app" \
+	  -w /app \
+	  golang:1.24.1 \
+	  sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o windows_check_gaint.exe main_gaint.go"
+	@echo "完成: windowsclient_gaint/windows_check_gaint.exe"
+
+clean:
+	rm -f winClient/windows_check.exe windowsclient_gaint/windows_check_gaint.exe
+```
+
+用方法：
+```bash
+# 安装依赖（如果需要）
+make build          # 编译所有客户端
+make build-client   # 仅编译标准版
+make build-gaint    # 仅编译增强版
+make clean          # 清理编译产物
+```
+
+#### 方法三：使用 Docker Compose 统一管理
+
+创建 `build-docker-compose.yml`：
+
+```yaml
+version: '3.8'
+
+services:
+  build-client:
+    image: golang:1.24.1
+    volumes:
+      - ./winClient:/app
+    working_dir: /app
+    command: sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o windows_check.exe main.go"
+    container_name: build-winclient
+
+  build-gaint:
+    image: golang:1.24.1
+    volumes:
+      - ./windowsclient_gaint:/app
+    working_dir: /app
+    command: sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o windows_check_gaint.exe main_gaint.go"
+    container_name: build-gaint
+```
+
+使用方法：
+```bash
+# 编译所有客户端
+docker-compose -f build-docker-compose.yml up --abort-on-container-exit
+
+# 或分别编译
+docker-compose -f build-docker-compose.yml run --rm build-client
+docker-compose -f build-docker-compose.yml run --rm build-gaint
+```
+
+### 编译参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `-s` | 去除符号表，减小文件体积 |
+| `-w` | 去除DWARF调试信息 |
+| `GOOS=windows` | 目标操作系统为Windows |
+| `GOARCH=amd64` | 目标架构为64位 |
+
+### 自动构建原理
+
+1. **环境隔离**：使用Docker容器确保编译环境一致
+2. **交叉编译**：Linux/Mac主机上直接编译Windows可执行文件
+3. **零配置**：无需在本地安装Go环境，一行命令即可编译
+4. **版本可控**：可指定Go版本（如1.24.1）确保兼容性
 
 ## 🐳 Docker版本更新方法
 
