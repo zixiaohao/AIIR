@@ -12,9 +12,9 @@ services:
       - "8000:8000"
     volumes:
       # 挂载外部配置文件（优先使用）
-      - ./config:/app/config
+      - /etc/aiir/config.json:/app/config.json
       # 持久化上传文件目录
-      - ./uploaded_files:/app/uploaded_files
+      - /etc/aiir/uploaded_files:/app/uploaded_files
     environment:
       # 可选：通过环境变量覆盖配置
       - PYTHONUNBUFFERED=1

@@ -65,18 +65,20 @@ system_check/
 
 ### 方式一：Docker部署（推荐）
 
+配置文件独立存放在宿主机 `/etc/aiir/config.json`，升级时无需重新配置。
+
 #### 1. 克隆仓库并准备配置
 
 ```bash
 git clone https://github.com/zixiaohao/AIIR.git
 cd AIIR/Server
 
-# 创建配置目录并复制配置文件
-mkdir -p config
-cp config.json.example config/config.json
+# 创建配置目录并复制配置文件（仅需首次执行）
+sudo mkdir -p /etc/aiir
+sudo cp config.json.example /etc/aiir/config.json
 
 # 编辑配置文件，填入API密钥
-vim config/config.json
+sudo vim /etc/aiir/config.json
 ```
 
 #### 2. 启动服务
