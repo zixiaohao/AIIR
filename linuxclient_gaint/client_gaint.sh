@@ -7,8 +7,8 @@
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 # ================= 配置区域 =================
-# Server地址（需要根据实际情况修改）
-SERVER_URL="http://YOUR_SERVER_ADDRESS"
+# Server地址（运行时会提示输入）
+SERVER_URL=""
 # ===========================================
 
 # Linux格式转换建议: dos2unix client_gaint.sh
@@ -239,6 +239,24 @@ if ! command -v curl &> /dev/null; then
   echo "按任意键退出..."
   read
   exit 0
+fi
+
+# 提示用户输入Server地址
+if [ -z "$SERVER_URL" ]; then
+    read -p "请输入Server地址 (格式: http://IP:端口): " input_server
+    SERVER_URL=$(echo "$input_server" | tr -d ' \n\r')
+    if [ -z "$SERVER_URL" ]; then
+        echo "[错误] Server地址不能为空！"
+        echo "按任意键退出..."
+        read
+        exit 1
+    fi
+    case "$SERVER_URL" in
+        http://*|https://*) ;;
+        *) SERVER_URL="http://$SERVER_URL" ;;
+    esac
+    echo "[Server地址] ${SERVER_URL}"
+    echo ""
 fi
 
 # 检查Server连接

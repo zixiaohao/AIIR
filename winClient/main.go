@@ -20,9 +20,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// 配置 - Server地址（需要修改为实际Server地址）
-const (
-	ServerURL = "http://YOUR_SERVER_ADDRESS"
+// 配置 - Server地址（运行时输入）
+var (
+	ServerURL string
 )
 
 // 全局变量
@@ -158,6 +158,26 @@ func fetchAttackPatterns() bool {
 }
 
 func main() {
+	// 获取Server地址
+	fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	ServerURL = strings.TrimSpace(input)
+
+	if ServerURL == "" {
+		fmt.Println("[错误] Server地址不能为空！")
+		fmt.Println("按回车键退出...")
+		fmt.Scanln()
+		return
+	}
+
+	if !strings.HasPrefix(ServerURL, "http://") && !strings.HasPrefix(ServerURL, "https://") {
+		ServerURL = "http://" + ServerURL
+	}
+
+	fmt.Printf("[Server地址] %s\n", ServerURL)
+	fmt.Println()
+
 	// 检查管理员权限
 	if !checkAdmin() {
 		fmt.Println("[提示] 程序需要管理员权限才能完整收集系统信息")
