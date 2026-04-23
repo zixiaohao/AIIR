@@ -6,18 +6,17 @@ LABEL description="AIIR - AI-driven Incident Response Server"
 # 设置工作目录
 WORKDIR /app
 
-# 配置DNS（解决构建环境DNS问题）
-RUN cat > /etc/apt/apt.conf << 'EOF'
-Acquire::Check-Valid-Until "false";
-Acquire::http::Proxy "http://8.8.8.8:53";
-EOF
-
-# 安装系统依赖 - 尝试多个镜像源
-RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
-    sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
-    apt-get update || (sed -i 's/mirrors.tuna.tsinghua.edu.cn/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null && apt-get update) || \
-    (sed -i 's/mirrors.tuna.tsinghua.edu.cn/deb.debian.org/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null && apt-get update) || true && \
-    apt-get install -y --no-install-recommends gcc libffi-dev && rm -rf /var/lib/apt/lists/*
+# 安装系统依赖
+# 策略：境外机器优先使用官方源，失败则换国内镜像源
+RUN if apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev; then \
+        echo "使用官方源安装成功"; \
+    else \
+        echo "官方源失败，切换到清华镜像源..." && \
+        sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
+        sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
+        apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
 
 # 复制并安装Python依赖
 COPY requirements.txt .
