@@ -1,0 +1,109 @@
+name: Build Windows Client
+
+on:
+  # 每次 push 到 main 分支时触发
+  push:
+    branches: [ main ]
+    paths:
+      - 'winClient/**'
+      - 'windowsclient_gaint/**'
+      - '.github/workflows/build-windows-client.yml'
+  # 每次 pull request 到 main 分支时触发
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'winClient/**'
+      - 'windowsclient_gaint/**'
+  # 支持手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-winclient:
+    name: Build winClient
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.1'
+
+      - name: Build winClient
+        working-directory: ./winClient
+        run: |
+          go build -ldflags "-s -w" -o ../dist/windows_check.exe main.go
+
+      - name: Upload winClient artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows_check
+          path: dist/windows_check.exe
+
+  build-windowsclient-gaint:
+    name: Build windowsclient_gaint
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.1'
+
+      - name: Build windowsclient_gaint
+        working-directory: ./windowsclient_gaint
+        run: |
+          go build -ldflags "-s -w" -o ../dist/windows_check_gaint.exe main_gaint.go
+
+      - name: Upload windowsclient_gaint artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows_check_gaint
+          path: dist/windows_check_gaint.exe
+
+  release:
+    name: Create Release
+    needs: [build-winclient, build-windowsclient-gaint]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Get short commit hash
+        id: commit
+        run: echo "sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.date.outputs.date }}-${{ steps.commit.outputs.sha }}
+          name: Windows Client Build ${{ steps.date.outputs.date }}
+          body: |
+            自动构建的Windows客户端
+
+            **包含文件：**
+            - `windows_check.exe` — 标准版Windows客户端
+            - `windows_check_gaint.exe` — 增强版Windows客户端（一次性全量分析）
+
+            **构建信息：**
+            - 提交: ${{ github.sha }}
+            - 时间: ${{ steps.date.outputs.date }}
+          files: |
+            dist/windows_check.exe
+            dist/windows_check_gaint.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

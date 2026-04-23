@@ -226,6 +226,36 @@ docker-compose logs -f
 - 上传文件：如有历史上传文件，可手动复制到 `/etc/aiir/uploaded_files/`
 - 端口冲突：确保源码Server已停止，避免8000端口冲突
 
+## ⚙️ 自动构建（CI/CD）
+
+本项目使用 **GitHub Actions** 自动构建Windows客户端。
+
+### 触发条件
+
+- **Push 到 main 分支**：当 `winClient/` 或 `windowsclient_gaint/` 目录有变更时自动触发
+- **Pull Request**：提交PR时自动触发构建验证
+- **手动触发**：在 Actions 页面点击 "Run workflow"
+
+### 构建产物
+
+每次构建成功后会自动创建 Release，包含：
+- `windows_check.exe` — 标准版Windows客户端
+- `windows_check_gaint.exe` — 增强版Windows客户端
+
+**下载地址**：https://github.com/zixiaohao/AIIR/releases
+
+### 工作流程说明
+
+```yaml
+构建流程：
+1. 检出代码
+2. 安装 Go 1.24.1
+3. 编译 winClient → windows_check.exe
+4. 编译 windowsclient_gaint → windows_check_gaint.exe
+5. 上传到Artifacts
+6. 创建GitHub Release（仅main分支push时）
+```
+
 ## 🐳 Docker版本更新方法
 
 当项目有新版本发布时，使用以下步骤快速更新：
