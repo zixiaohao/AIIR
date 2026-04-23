@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# 使用 Docker Hub 镜像加速
+FROM docker.1ms.run/library/python:3.11-slim
 
 LABEL maintainer="AIIR Team"
 LABEL description="AIIR - AI-driven Incident Response Server"
@@ -6,16 +7,11 @@ LABEL description="AIIR - AI-driven Incident Response Server"
 # 设置工作目录
 WORKDIR /app
 
-# 安装系统依赖
-# 策略：境外机器优先使用官方源，失败则换国内镜像源
-RUN if apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev; then \
-        echo "使用官方源安装成功"; \
-    else \
-        echo "官方源失败，切换到清华镜像源..." && \
-        sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
-        sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
-        apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev; \
-    fi && \
+# 安装系统依赖 - 使用清华镜像源
+RUN apt-get update && \
+    sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get install -y --no-install-recommends gcc libffi-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # 复制并安装Python依赖

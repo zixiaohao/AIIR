@@ -21,10 +21,9 @@ CONFIG_DIR="/etc/aiir"
 
 # Git代理配置
 GIT_PROXY=""
-# Docker镜像加速
-DOCKER_MIRRORS=(
-    "https://docker.1ms.run"
-)
+# Docker镜像加速 - 统一使用 docker.1ms.run
+DOCKER_MIRROR="docker.1ms.run"
+DOCKER_DAEMON_MIRROR="https://docker.1ms.run"
 
 # -----------------------------------------------------------------------------
 # 工具函数
@@ -90,24 +89,20 @@ setup_git_proxy() {
 
 # 配置Docker镜像加速
 setup_docker_mirror() {
-    log_info "配置 Docker 镜像加速..."
+    log_info "配置 Docker 镜像加速 ($DOCKER_DAEMON_MIRROR)..."
     
     # 创建Docker配置目录
     mkdir -p ~/.docker
     
-    # 尝试添加镜像源
-    for mirror in "${DOCKER_MIRRORS[@]}"; do
-        if curl -s --connect-timeout 3 "$mirror" > /dev/null 2>&1; then
-            log_success "使用镜像: $mirror"
-            cat > ~/.docker/daemon.json << EOF
+    # 写入daemon.json
+    cat > ~/.docker/daemon.json << EOF
 {
-    "registry-mirrors": ["$mirror"],
+    "registry-mirrors": ["$DOCKER_DAEMON_MIRROR"],
     "dns": ["8.8.8.8", "8.8.4.4"]
 }
 EOF
-            break
-        fi
-    done
+    
+    log_success "Docker 镜像加速已配置: $DOCKER_DAEMON_MIRROR"
     
     # 重启Docker服务
     if command -v systemctl &> /dev/null; then
@@ -383,13 +378,17 @@ build_exe() {
     # ==================== Windows 客户端 ====================
     log_info "=== 编译 Windows 客户端 ==="
     
+    # 使用加速器拉取Go镜像并编译
+    GOLANG_IMAGE="${DOCKER_MIRROR}/library/golang:1.24.1"
+    log_info "使用镜像: $GOLANG_IMAGE"
+    
     # 编译标准版
     log_info "编译标准版 windows_check.exe..."
     log_info "注入 Server 地址: $SERVER_URL"
     docker run --rm \
         -v "$INSTALL_DIR/winClient:/app" \
         -w /app \
-        golang:1.24.1 \
+        "$GOLANG_IMAGE" \
         sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w -X main.defaultServerURL=$SERVER_URL' -o /app/windows_check.exe main.go"
     
     # 复制到输出目录
@@ -401,7 +400,7 @@ build_exe() {
     docker run --rm \
         -v "$INSTALL_DIR/windowsclient_gaint:/app" \
         -w /app \
-        golang:1.24.1 \
+        "$GOLANG_IMAGE" \
         sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w -X main.defaultServerURL=$SERVER_URL' -o /app/windows_check_gaint.exe main_gaint.go"
     
     # 复制到输出目录
