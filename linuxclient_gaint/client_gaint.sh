@@ -7,7 +7,8 @@
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 # ================= 配置区域 =================
-# Server地址（运行时会提示输入）
+# Server地址（可通过环境变量AIIR_SERVER_URL设置默认值）
+DEFAULT_SERVER_URL="${AIIR_SERVER_URL:-}"
 SERVER_URL=""
 # ===========================================
 
@@ -243,8 +244,16 @@ fi
 
 # 提示用户输入Server地址
 if [ -z "$SERVER_URL" ]; then
-    read -p "请输入Server地址 (格式: http://IP:端口): " input_server
-    SERVER_URL=$(echo "$input_server" | tr -d ' \n\r')
+    if [ -n "$DEFAULT_SERVER_URL" ]; then
+        read -p "请输入Server地址 (格式: http://IP:端口) [默认: ${DEFAULT_SERVER_URL}]: " input_server
+        SERVER_URL=$(echo "$input_server" | tr -d ' \n\r')
+        if [ -z "$SERVER_URL" ]; then
+            SERVER_URL="$DEFAULT_SERVER_URL"
+        fi
+    else
+        read -p "请输入Server地址 (格式: http://IP:端口): " input_server
+        SERVER_URL=$(echo "$input_server" | tr -d ' \n\r')
+    fi
     if [ -z "$SERVER_URL" ]; then
         echo "[错误] Server地址不能为空！"
         echo "按任意键退出..."

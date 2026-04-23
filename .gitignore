@@ -39,6 +39,7 @@ Thumbs.db
 # ================= 项目特定 =================
 # Server敏感配置（含API密钥）
 Server/config.json
+Server/.env
 Server/config/
 
 # Docker相关

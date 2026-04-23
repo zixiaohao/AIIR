@@ -24,6 +24,7 @@ import (
 // 全局变量
 var (
 	serverURL        string
+	defaultServerURL string
 	logFile          string
 	keywordsRegex    *regexp.Regexp
 	attackPatterns   map[string][]AttackPattern
@@ -189,10 +190,19 @@ func main() {
 
 	// 设置Server地址
 	if serverAddr == "" {
-		fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
 		reader := bufio.NewReader(os.Stdin)
-		input, _ := reader.ReadString('\n')
-		serverURL = strings.TrimSpace(input)
+		if defaultServerURL != "" {
+			fmt.Printf("请输入Server地址 (格式: http://IP:端口) [默认: %s]: ", defaultServerURL)
+			input, _ := reader.ReadString('\n')
+			serverURL = strings.TrimSpace(input)
+			if serverURL == "" {
+				serverURL = defaultServerURL
+			}
+		} else {
+			fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
+			input, _ := reader.ReadString('\n')
+			serverURL = strings.TrimSpace(input)
+		}
 		
 		if serverURL == "" {
 			fmt.Println("[错误] Server地址不能为空！")
@@ -914,22 +924,6 @@ func checkWebShell() {
 }
 
 // 7. 进程检查
-func checkProcesses() {
-	writeLog("进程")
-
-	// 获取进程列表 - 优先使用wmic，失败则使用PowerShell
-	processes := execCommandWithFallback(
-		"wmic", []string{"process", "get", "ProcessId,Name,ExecutablePath,CommandLine", "/format:list"},
-		"powershell", []string{"-Command", "Get-Process | Select-Object Id, Name, Path, CommandLine | Format-Table -AutoSize -Wrap"},
-	)
-	writeCode(processes)
-
-	// 获取进程详细信息（带签名检查）
-	writeLog("进程详细信息（带签名检查）")
-	// 使用PowerShell获取进程和签名信息
-	sigCheck := execCommand("powershell", "-Command", "Get-Process | Where-Object {$_.Path -ne $null} | Select-Object Name, Id, Path, @{Name='Signerpackage main
-
-// 7. 进程检查（续）
 func checkProcesses() {
 	writeLog("进程")
 
