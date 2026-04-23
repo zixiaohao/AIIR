@@ -308,11 +308,13 @@ if command -v python3 &> /dev/null; then
         
         # 保存分析报告到本地
         analysis_file="${input_string}_analysis_report.md"
-        echo "$response" | python3 -c "
-import sys, json
+        echo "$response" | ANALYSIS_FILE="$analysis_file" python3 -c "
+import sys, json, os
 data = json.load(sys.stdin)
-print(data.get('analysis_report', ''))
-" > "$analysis_file"
+report = data.get('analysis_report', '')
+with open(os.environ['ANALYSIS_FILE'], 'w', encoding='utf-8') as f:
+    f.write(report)
+"
         
         # 显示报告
         echo ""
