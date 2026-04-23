@@ -199,6 +199,33 @@ python ai_manager.py rate-limit                        # 查看限流配置
 python ai_manager.py full-analysis-model               # 查看一次性分析模型
 ```
 
+## 🔄 源码部署迁移到Docker
+
+如果你当前使用源码部署，想要迁移到Docker部署：
+
+```bash
+# 1. 停止源码运行的Server（Ctrl+C 或 kill 进程）
+
+# 2. 复制现有配置文件到Docker挂载路径
+sudo mkdir -p /etc/aiir
+sudo cp /path/to/your/AIIR/Server/config.json /etc/aiir/config.json
+
+# 3. 进入Server目录启动Docker
+cd /path/to/your/AIIR/Server
+docker-compose up -d
+
+# 4. 验证Docker运行状态
+docker-compose ps
+docker-compose logs -f
+
+# 5. 确认正常后，源码进程可以完全停止
+```
+
+**迁移说明**：
+- 配置文件复用：直接复制现有的 `config.json` 即可，无需重新配置API密钥
+- 上传文件：如有历史上传文件，可手动复制到 `/etc/aiir/uploaded_files/`
+- 端口冲突：确保源码Server已停止，避免8000端口冲突
+
 ## 🐳 Docker版本更新方法
 
 当项目有新版本发布时，使用以下步骤快速更新：
