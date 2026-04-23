@@ -159,6 +159,16 @@ func fetchAttackPatterns() bool {
 }
 
 func main() {
+	// 先检查管理员权限（避免收集信息后才发现没有权限）
+	if !checkAdmin() {
+		fmt.Println("[提示] 程序需要管理员权限才能完整收集系统信息")
+		fmt.Println("[提示] 正在请求管理员权限...")
+		time.Sleep(1 * time.Second)
+		requestElevation()
+	}
+
+	showBanner()
+
 	// 获取Server地址
 	reader := bufio.NewReader(os.Stdin)
 	if defaultServerURL != "" {
@@ -187,16 +197,6 @@ func main() {
 
 	fmt.Printf("[Server地址] %s\n", ServerURL)
 	fmt.Println()
-
-	// 检查管理员权限
-	if !checkAdmin() {
-		fmt.Println("[提示] 程序需要管理员权限才能完整收集系统信息")
-		fmt.Println("[提示] 正在请求管理员权限...")
-		time.Sleep(1 * time.Second)
-		requestElevation()
-	}
-
-	showBanner()
 
 	fmt.Println("[权限状态] ✅ 管理员权限")
 	fmt.Println()
@@ -605,10 +605,12 @@ func sendDataToServer(ticketID, hostname string) {
 
 		// 保存分析报告到本地
 		reportFile := fmt.Sprintf("%s_analysis_report.md", ticketID)
+		reportSaved := false
 		err = os.WriteFile(reportFile, []byte(summaryResponse.AnalysisReport), 0644)
 		if err != nil {
 			fmt.Printf("[警告] 保存报告失败: %v\n", err)
 		} else {
+			reportSaved = true
 			fmt.Println()
 			fmt.Println("═══════════════════════════════════════════════════════════════")
 			fmt.Println("                AI 安全应急响应分析报告                        ")
@@ -656,8 +658,8 @@ func sendDataToServer(ticketID, hostname string) {
 			}
 		}
 
-		// 上传分析报告文件
-		if _, err := os.Stat(reportFile); err == nil {
+		// 上传分析报告文件（仅在成功保存时才上传）
+		if reportSaved {
 			fmt.Printf("[上传] 正在上传分析报告: %s\n", reportFile)
 			reportContent, err := os.ReadFile(reportFile)
 			if err != nil {
