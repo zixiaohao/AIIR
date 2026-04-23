@@ -533,8 +533,16 @@ func sendDataToServer(ticketID, hostname string) {
 		}
 
 		if response.Success {
-			if response.AnalysisResult != "" && !strings.Contains(response.AnalysisResult, "无异常") {
-				fmt.Println(" [⚠️ 发现异常]")
+			// 保留所有分析结果，即使是"无异常"也保留详细分析
+			if response.AnalysisResult != "" {
+				if strings.Contains(response.AnalysisResult, "无异常") || 
+				   strings.Contains(response.AnalysisResult, "正常") ||
+				   strings.Contains(response.AnalysisResult, "未发现") {
+					fmt.Println(" [✅ 无异常]")
+				} else {
+					fmt.Println(" [⚠️ 发现异常]")
+				}
+				// 始终添加分析结果到列表
 				sectionResults = append(sectionResults, response.AnalysisResult)
 			} else {
 				fmt.Println(" [✅ 无异常]")
