@@ -913,18 +913,4 @@ func checkWebShell() {
 	}
 }
 
-// 7. 进程检查
-func checkProcesses() {
-	writeLog("进程")
-
-	// 获取进程列表 - 优先使用wmic，失败则使用PowerShell
-	processes := execCommandWithFallback(
-		"wmic", []string{"process", "get", "ProcessId,Name,ExecutablePath,CommandLine", "/format:list"},
-		"powershell", []string{"-Command", "Get-Process | Select-Object Id, Name, Path, CommandLine | Format-Table -AutoSize -Wrap"},
-	)
-	writeCode(processes)
-
-	// 获取进程详细信息（带签名检查）
-	writeLog("进程详细信息（带签名检查）")
-	// 使用PowerShell获取进程和签名信息
-	sigCheck := execCommand("powershell", "-Command", "Get-Process | Where-Object {$_.Path -ne $null} | Select-Object Name, Id, Path, @{Name='Signer
+// 7. 进程检查 - 完整实现见 main_gaint_part2.go 中的 checkProcesses()
