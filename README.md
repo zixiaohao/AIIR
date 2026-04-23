@@ -63,7 +63,52 @@ system_check/
 
 ## 🚀 快速开始
 
-### 1. 部署Server端
+### 方式一：Docker部署（推荐）
+
+#### 1. 克隆仓库并准备配置
+
+```bash
+git clone https://github.com/zixiaohao/AIIR.git
+cd AIIR/Server
+
+# 创建配置目录并复制配置文件
+mkdir -p config
+cp config.json.example config/config.json
+
+# 编辑配置文件，填入API密钥
+vim config/config.json
+```
+
+#### 2. 启动服务
+
+```bash
+# 使用Docker Compose启动
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+#### 3. Docker常用命令
+
+```bash
+# 查看运行状态
+docker-compose ps
+
+# 重启服务
+docker-compose restart
+
+# 查看容器日志
+docker logs -f aiir-server
+
+# 进入容器内部
+docker exec -it aiir-server bash
+```
+
+### 方式二：手动部署
 
 ```bash
 cd Server
@@ -150,6 +195,58 @@ python ai_manager.py set-key deepseek sk-xxx           # 设置API密钥
 python ai_manager.py add mymodel "My Model" URL gpt-4  # 添加新模型
 python ai_manager.py rate-limit                        # 查看限流配置
 python ai_manager.py full-analysis-model               # 查看一次性分析模型
+```
+
+## 🐳 Docker版本更新方法
+
+当项目有新版本发布时，使用以下步骤快速更新：
+
+### 1. 拉取最新代码
+
+```bash
+cd AIIR
+git pull origin main
+```
+
+### 2. 更新Docker镜像并重启
+
+```bash
+cd Server
+
+# 停止并删除旧容器
+docker-compose down
+
+# 重新构建镜像（强制拉取最新依赖）
+docker-compose build --no-cache
+
+# 启动新容器
+docker-compose up -d
+
+# 查看更新后的日志
+docker-compose logs -f
+```
+
+### 3. 一键更新脚本
+
+也可以将上述步骤写入脚本，实现一键更新：
+
+```bash
+#!/bin/bash
+# update.sh - 一键更新AIIR Server
+
+cd "$(dirname "$0")" || exit 1
+
+echo "[*] 正在拉取最新代码..."
+git pull origin main || exit 1
+
+echo "[*] 正在更新Docker容器..."
+cd Server
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+echo "[*] 更新完成！"
+echo "[*] 查看日志: docker-compose logs -f"
 ```
 
 ## 📌 注意事项

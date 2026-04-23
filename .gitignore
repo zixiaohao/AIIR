@@ -39,6 +39,10 @@ Thumbs.db
 # ================= 项目特定 =================
 # Server敏感配置（含API密钥）
 Server/config.json
+Server/config/
+
+# Docker相关
+uploaded_files/
 # Server上传的本地文件
 Server/uploaded_files/
 # 分析报告和日志（测试产物）
