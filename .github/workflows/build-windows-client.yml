@@ -4,6 +4,8 @@ on:
   # 每次 push 到 main 分支时触发
   push:
     branches: [ main ]
+    tags:
+      - 'v*'
     paths:
       - 'winClient/**'
       - 'windowsclient_gaint/**'
@@ -71,7 +73,7 @@ jobs:
     name: Create Release
     needs: [build-winclient, build-windowsclient-gaint]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -79,19 +81,20 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Get current date
-        id: date
-        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
-
-      - name: Get short commit hash
-        id: commit
-        run: echo "sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Get tag name
+        id: tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "name=v$(date +'%Y%m%d')-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.date.outputs.date }}-${{ steps.commit.outputs.sha }}
-          name: Windows Client Build ${{ steps.date.outputs.date }}
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: Release ${{ steps.tag.outputs.name }}
           body: |
             自动构建的Windows客户端
 
@@ -101,7 +104,7 @@ jobs:
 
             **构建信息：**
             - 提交: ${{ github.sha }}
-            - 时间: ${{ steps.date.outputs.date }}
+            - 时间: ${{ steps.date.outputs.date || 'N/A' }}
           files: |
             dist/windows_check.exe
             dist/windows_check_gaint.exe
