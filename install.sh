@@ -23,9 +23,7 @@ CONFIG_DIR="/etc/aiir"
 GIT_PROXY=""
 # Docker镜像加速
 DOCKER_MIRRORS=(
-    "https://docker.mirrors.ustc.edu.cn"
-    "https://mirror.ccs.tencentyun.com"
-    "https://registry.docker-cn.com"
+    "https://docker.1ms.run"
 )
 
 # -----------------------------------------------------------------------------
@@ -566,9 +564,9 @@ show_menu() {
     echo "         AI驱动的安全应急响应分析系统"
     echo "============================================"
     echo ""
-    echo "1. 安装 (自动git源码安装 + Docker部署)"
-    echo "2. 编译 exe (使用Docker交叉编译)"
-    echo "3. 升级版本"
+    echo "1. 部署服务端 (Docker安装 + 源码部署)"
+    echo "2. 编译客户端 (exe编译 + Linux打包)"
+    echo "3. 更新版本 (停止服务 + 拉取代码 + 重建)"
     echo "4. 查看状态"
     echo "5. 卸载"
     echo "0. 退出"
