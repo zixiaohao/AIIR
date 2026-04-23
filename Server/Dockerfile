@@ -6,9 +6,6 @@ LABEL description="AIIR - AI-driven Incident Response Server"
 # 设置工作目录
 WORKDIR /app
 
-# 解决DNS解析问题 - 添加公共DNS服务器
-RUN echo 'nameserver 8.8.8.8\nnameserver 8.8.4.4' > /etc/resolv.conf
-
 # 安装系统依赖 - 直接使用清华镜像源
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
     sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
