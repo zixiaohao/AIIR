@@ -6,12 +6,18 @@ LABEL description="AIIR - AI-driven Incident Response Server"
 # 设置工作目录
 WORKDIR /app
 
-# 安装系统依赖 - 直接使用清华镜像源
+# 配置DNS（解决构建环境DNS问题）
+RUN cat > /etc/apt/apt.conf << 'EOF'
+Acquire::Check-Valid-Until "false";
+Acquire::http::Proxy "http://8.8.8.8:53";
+EOF
+
+# 安装系统依赖 - 尝试多个镜像源
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
     sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends gcc libffi-dev && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get update || (sed -i 's/mirrors.tuna.tsinghua.edu.cn/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null && apt-get update) || \
+    (sed -i 's/mirrors.tuna.tsinghua.edu.cn/deb.debian.org/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null && apt-get update) || true && \
+    apt-get install -y --no-install-recommends gcc libffi-dev && rm -rf /var/lib/apt/lists/*
 
 # 复制并安装Python依赖
 COPY requirements.txt .
