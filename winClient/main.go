@@ -225,7 +225,6 @@ func main() {
 
 	// 获取工单ID
 	fmt.Print("请输入工单ID: ")
-	reader := bufio.NewReader(os.Stdin)
 	ticketID, _ := reader.ReadString('\n')
 	ticketID = strings.TrimSpace(ticketID)
 

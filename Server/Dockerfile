@@ -6,28 +6,11 @@ LABEL description="AIIR - AI-driven Incident Response Server"
 # 设置工作目录
 WORKDIR /app
 
-# 尝试使用官方源，如果失败则切换到国内镜像源
-RUN echo '#!/bin/bash\n\
-set -e\n\
-apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev\n\
-' > /tmp/install_deps.sh && \
-    bash -c "apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev 2>/dev/null" || \
-    (echo "官方源连接失败，切换到国内镜像源..." && \
-    sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    true && \
-    apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev) && \
-    rm -rf /var/lib/apt/lists/* /tmp/install_deps.sh || true
-
-# 如果上面失败，使用备用方法
-RUN if ! command -v gcc >/dev/null 2>&1; then \
-    sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
-    apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev && rm -rf /var/lib/apt/lists/*; \
-    fi
-
-# 安装系统依赖（确保成功）
-RUN apt-get update || (sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && apt-get update) && \
-    apt-get install -y --no-install-recommends gcc libffi-dev && rm -rf /var/lib/apt/lists/*
+# 安装系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # 复制并安装Python依赖
 COPY requirements.txt .
