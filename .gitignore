@@ -1,0 +1,55 @@
+# ================= 编译产物 =================
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.a
+*.out
+
+# ================= Go =================
+# Go编译输出
+winClient/windows_check-v4.exe
+windowsclient_gaint/windows_check_gaint.exe
+main_gaint_merged.go
+!winClient/go.sum
+!windowsclient_gaint/go.sum
+
+# ================= Python =================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# ================= IDE =================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ================= 项目特定 =================
+# Server敏感配置（含API密钥）
+Server/config.json
+# Server上传的本地文件
+Server/uploaded_files/
+# 分析报告和日志（测试产物）
+*_analysis_report.md
+*_log.md
+windowsclient_gaint/test*
+# 压缩包
+*.tar.gz
+*.zip
+
+# ================= 临时文件 =================
+*.tmp
+*.bak
+*.log
