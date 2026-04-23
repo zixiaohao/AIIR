@@ -455,9 +455,8 @@ def analyze_section(section_title, content_block, model_key=None, platform="linu
     
     result = call_ai_api(model_key, system_prompt, content_block)
     
-    if "无异常" not in result and len(result) > 5:
-        return f"【模块：{section_title}】\n{result}\n"
-    return None
+    # 保留所有分析结果，包括"无异常"的详细分析
+    return f"【模块：{section_title}】\n{result}\n"
 
 def detect_platform(log_content):
     """检测日志内容来自哪个平台"""
@@ -908,8 +907,8 @@ def analyze_summary_api():
         
         actual_model = model_key or ai_manager.default_model
         
-        # 汇总所有分析结果
-        full_summary = '\n'.join([r for r in section_results if r and '无异常' not in r])
+        # 汇总所有分析结果（保留所有详细分析，包括无异常的）
+        full_summary = '\n'.join([r for r in section_results if r])
         if not full_summary:
             full_summary = "各项基础检查均未发现明显异常指标。"
         

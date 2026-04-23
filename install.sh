@@ -260,6 +260,24 @@ setup_config() {
 }
 
 # -----------------------------------------------------------------------------
+# 检查docker compose可用性
+# -----------------------------------------------------------------------------
+
+check_docker_compose() {
+    # 优先使用新版 docker compose
+    if docker compose version &> /dev/null 2>&1; then
+        echo "docker compose"
+        return 0
+    # 回退到旧版 docker-compose
+    elif command -v docker-compose &> /dev/null 2>&1; then
+        echo "docker-compose"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # 部署服务
 # -----------------------------------------------------------------------------
 
@@ -271,11 +289,29 @@ deploy_service() {
     # 确保脚本可执行
     chmod +x docker-entrypoint.sh
     
-    # 启动Docker Compose
-    sudo docker-compose up -d
+    # 检查docker compose可用性
+    COMPOSE_CMD=$(check_docker_compose)
+    if [ $? -ne 0 ]; then
+        log_warn "docker compose 未安装，尝试安装..."
+        sudo apt-get install -y docker-compose-plugin || sudo apt-get install -y docker-compose
+        COMPOSE_CMD=$(check_docker_compose)
+        if [ $? -ne 0 ]; then
+            log_error "无法安装 docker compose，请手动安装后重试"
+            return 1
+        fi
+    fi
+    
+    log_info "使用命令: $COMPOSE_CMD"
+    
+    # 启动服务
+    if [ "$COMPOSE_CMD" = "docker compose" ]; then
+        sudo docker compose up -d
+    else
+        sudo docker-compose up -d
+    fi
     
     log_success "服务已部署!"
-    log_info "查看日志: docker-compose logs -f"
+    log_info "查看日志: $COMPOSE_CMD logs -f"
     log_info "访问地址: http://localhost:8000"
 }
 
@@ -440,10 +476,21 @@ build_exe() {
 upgrade_version() {
     log_info "开始升级版本..."
     
+    # 检查docker compose可用性
+    COMPOSE_CMD=$(check_docker_compose)
+    if [ $? -ne 0 ]; then
+        log_error "docker compose 未安装，请先安装"
+        return 1
+    fi
+    
     # 停止服务
     log_info "停止服务..."
     cd "$INSTALL_DIR/Server"
-    sudo docker-compose down
+    if [ "$COMPOSE_CMD" = "docker compose" ]; then
+        sudo docker compose down
+    else
+        sudo docker-compose down
+    fi
     
     # 更新源码
     log_info "更新源码..."
@@ -452,14 +499,22 @@ upgrade_version() {
     
     # 重建镜像
     log_info "重建 Docker 镜像..."
-    sudo docker-compose build --no-cache
+    if [ "$COMPOSE_CMD" = "docker compose" ]; then
+        sudo docker compose build --no-cache
+    else
+        sudo docker-compose build --no-cache
+    fi
     
     # 启动服务
     log_info "启动服务..."
-    sudo docker-compose up -d
+    if [ "$COMPOSE_CMD" = "docker compose" ]; then
+        sudo docker compose up -d
+    else
+        sudo docker-compose up -d
+    fi
     
     log_success "升级完成！"
-    log_info "查看日志: docker-compose logs -f"
+    log_info "查看日志: $COMPOSE_CMD logs -f"
 }
 
 # -----------------------------------------------------------------------------
@@ -487,8 +542,17 @@ show_status() {
     
     echo ""
     echo -e "=== Docker 容器状态 ==="
-    cd "$INSTALL_DIR/Server" 2>/dev/null || cd "$INSTALL_DIR"
-    sudo docker-compose ps 2>/dev/null || echo "服务未部署"
+    COMPOSE_CMD=$(check_docker_compose)
+    if [ $? -eq 0 ] && [ -d "$INSTALL_DIR/Server" ]; then
+        cd "$INSTALL_DIR/Server"
+        if [ "$COMPOSE_CMD" = "docker compose" ]; then
+            sudo docker compose ps 2>/dev/null || echo "服务未部署"
+        else
+            sudo docker-compose ps 2>/dev/null || echo "服务未部署"
+        fi
+    else
+        echo "服务未部署"
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -523,7 +587,15 @@ uninstall() {
     fi
     
     log_info "停止服务..."
-    cd "$INSTALL_DIR/Server" 2>/dev/null && sudo docker-compose down
+    COMPOSE_CMD=$(check_docker_compose)
+    if [ $? -eq 0 ] && [ -d "$INSTALL_DIR/Server" ]; then
+        cd "$INSTALL_DIR/Server"
+        if [ "$COMPOSE_CMD" = "docker compose" ]; then
+            sudo docker compose down 2>/dev/null || true
+        else
+            sudo docker-compose down 2>/dev/null || true
+        fi
+    fi
     
     log_info "删除安装目录..."
     sudo rm -rf "$INSTALL_DIR"
