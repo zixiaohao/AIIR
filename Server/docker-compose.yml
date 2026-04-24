@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: host
     image: aiir-server:latest
     container_name: aiir-server
     restart: unless-stopped
