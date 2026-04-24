@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       network: host
+      pull_policy: build
     image: aiir-server:latest
     container_name: aiir-server
     restart: unless-stopped
