@@ -7,6 +7,10 @@ LABEL description="AIIR - AI-driven Incident Response Server"
 # 设置工作目录
 WORKDIR /app
 
+# 配置DNS（使用阿里云DNS确保构建过程可解析）
+RUN echo "nameserver 223.5.5.5" > /etc/resolv.conf && \
+    echo "nameserver 119.29.29.29" >> /etc/resolv.conf
+
 # 安装系统依赖
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libffi-dev && \
