@@ -1,0 +1,8 @@
+# AIIR Server - Python Dependencies
+# 必需依赖
+flask>=2.0.0
+requests>=2.28.0
+
+# 可选依赖（对象存储功能）
+boto3>=1.26.0
+pycryptodome>=3.15.0

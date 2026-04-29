@@ -1,0 +1,756 @@
+{
+  "version": "2.0",
+  "update_time": "2026-03-19",
+  "patterns": {
+    "general": [
+      {
+        "pattern": "${jndi:",
+        "cve": "CVE-2021-44228",
+        "description": "Log4j远程代码执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "${${",
+        "cve": "CVE-2021-44228",
+        "description": "Log4j绕过变体",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "ldap://",
+        "cve": "CVE-2021-44228",
+        "description": "Log4j JNDI注入",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "rmi://",
+        "cve": "CVE-2021-44228",
+        "description": "Log4j RMI注入",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "dns://",
+        "cve": "CVE-2021-44228",
+        "description": "Log4j DNS外带",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "union select",
+        "cve": "N/A",
+        "description": "SQL联合注入",
+        "severity": "high",
+        "category": "SQLi"
+      },
+      {
+        "pattern": "union/**/select",
+        "cve": "N/A",
+        "description": "SQL注入(绕过WAF)",
+        "severity": "high",
+        "category": "SQLi"
+      },
+      {
+        "pattern": "xp_cmdshell",
+        "cve": "N/A",
+        "description": "SQL Server命令执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "into outfile",
+        "cve": "N/A",
+        "description": "MySQL写文件",
+        "severity": "high",
+        "category": "FileWrite"
+      },
+      {
+        "pattern": "load_file(",
+        "cve": "N/A",
+        "description": "MySQL读文件",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "pg_read_file",
+        "cve": "N/A",
+        "description": "PostgreSQL读文件",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "eval(",
+        "cve": "N/A",
+        "description": "代码执行函数",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "assert(",
+        "cve": "N/A",
+        "description": "PHP代码执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "system(",
+        "cve": "N/A",
+        "description": "命令执行函数",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "exec(",
+        "cve": "N/A",
+        "description": "命令执行函数",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "shell_exec(",
+        "cve": "N/A",
+        "description": "PHP命令执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "passthru(",
+        "cve": "N/A",
+        "description": "PHP命令执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "popen(",
+        "cve": "N/A",
+        "description": "PHP命令执行",
+        "severity": "high",
+        "category": "RCE"
+      },
+      {
+        "pattern": "proc_open(",
+        "cve": "N/A",
+        "description": "PHP命令执行",
+        "severity": "high",
+        "category": "RCE"
+      },
+      {
+        "pattern": "pcntl_exec(",
+        "cve": "N/A",
+        "description": "PHP命令执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "../",
+        "cve": "N/A",
+        "description": "目录遍历",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "..\\",
+        "cve": "N/A",
+        "description": "Windows目录遍历",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "....//",
+        "cve": "N/A",
+        "description": "目录遍历绕过",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "/etc/passwd",
+        "cve": "N/A",
+        "description": "Linux敏感文件读取",
+        "severity": "critical",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "/etc/shadow",
+        "cve": "N/A",
+        "description": "Linux密码文件读取",
+        "severity": "critical",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "<script>",
+        "cve": "N/A",
+        "description": "XSS攻击",
+        "severity": "medium",
+        "category": "XSS"
+      },
+      {
+        "pattern": "javascript:",
+        "cve": "N/A",
+        "description": "XSS伪协议",
+        "severity": "medium",
+        "category": "XSS"
+      },
+      {
+        "pattern": "onerror=",
+        "cve": "N/A",
+        "description": "XSS事件处理",
+        "severity": "medium",
+        "category": "XSS"
+      },
+      {
+        "pattern": "java.lang.Runtime",
+        "cve": "N/A",
+        "description": "Java反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "ProcessImpl",
+        "cve": "N/A",
+        "description": "Java反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "org.apache.commons.collections",
+        "cve": "N/A",
+        "description": "CommonsCollections反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "InvokerTransformer",
+        "cve": "N/A",
+        "description": "CC链反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "TemplatesImpl",
+        "cve": "N/A",
+        "description": "Fastjson反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "com.alibaba.fastjson",
+        "cve": "N/A",
+        "description": "Fastjson反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "rememberMe=",
+        "cve": "CVE-2016-4437",
+        "description": "Shiro反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "class.module.classLoader",
+        "cve": "CVE-2022-22965",
+        "description": "Spring4Shell RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "/actuator",
+        "cve": "N/A",
+        "description": "Spring Actuator暴露",
+        "severity": "high",
+        "category": "InfoLeak"
+      },
+      {
+        "pattern": "/actuator/env",
+        "cve": "N/A",
+        "description": "Spring环境信息泄露",
+        "severity": "critical",
+        "category": "InfoLeak"
+      },
+      {
+        "pattern": "/actuator/heapdump",
+        "cve": "N/A",
+        "description": "Spring内存dump",
+        "severity": "critical",
+        "category": "InfoLeak"
+      },
+      {
+        "pattern": "php://input",
+        "cve": "N/A",
+        "description": "PHP伪协议",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "php://filter",
+        "cve": "N/A",
+        "description": "PHP文件读取",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "phar://",
+        "cve": "N/A",
+        "description": "PHP反序列化",
+        "severity": "high",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "file_put_contents",
+        "cve": "N/A",
+        "description": "PHP文件写入",
+        "severity": "critical",
+        "category": "FileWrite"
+      },
+      {
+        "pattern": "move_uploaded_file",
+        "cve": "N/A",
+        "description": "PHP文件上传",
+        "severity": "high",
+        "category": "FileWrite"
+      }
+    ],
+    "seeyon": [
+      {
+        "pattern": "/seeyon/ajax.do",
+        "cve": "CVE-2023-2648",
+        "description": "致远OA ajax.do RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "ajax.do?method=",
+        "cve": "CVE-2023-2648",
+        "description": "致远OA ajax方法调用",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "htmlofficeservlet",
+        "cve": "CNVD-2020-27268",
+        "description": "致远OA OfficeServlet RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "DBSTEP",
+        "cve": "CNVD-2020-27268",
+        "description": "致远OA数据库操作",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "autoinstall.jsp",
+        "cve": "N/A",
+        "description": "致远OA自动安装页面",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "wpsAssistServlet",
+        "cve": "CNVD-2021-01631",
+        "description": "致远OA WPS助手RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "/seeyon/fileUpload.do",
+        "cve": "N/A",
+        "description": "致远OA文件上传",
+        "severity": "high",
+        "category": "FileWrite"
+      },
+      {
+        "pattern": "/seeyon/privilege.do",
+        "cve": "N/A",
+        "description": "致远OA权限管理",
+        "severity": "high",
+        "category": "AuthBypass"
+      }
+    ],
+    "weaver": [
+      {
+        "pattern": "/weaver/bsh.servlet.BshServlet",
+        "cve": "CNVD-2021-33202",
+        "description": "泛微OA BeanShell RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "bsh.servlet",
+        "cve": "CNVD-2021-33202",
+        "description": "泛微BeanShell接口",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "bsh.eval",
+        "cve": "CNVD-2021-33202",
+        "description": "BeanShell执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "weaver.common.ctrl",
+        "cve": "N/A",
+        "description": "泛微通用控制器",
+        "severity": "high",
+        "category": "RCE"
+      },
+      {
+        "pattern": "Cap4Action",
+        "cve": "N/A",
+        "description": "泛微CAP4动作",
+        "severity": "high",
+        "category": "RCE"
+      },
+      {
+        "pattern": "ln.FileDownload",
+        "cve": "N/A",
+        "description": "泛微文件下载",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "filedownload",
+        "cve": "N/A",
+        "description": "泛微文件下载接口",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "ecology.properties",
+        "cve": "N/A",
+        "description": "泛微配置文件",
+        "severity": "critical",
+        "category": "InfoLeak"
+      },
+      {
+        "pattern": "weaver.properties",
+        "cve": "N/A",
+        "description": "泛微配置文件",
+        "severity": "critical",
+        "category": "InfoLeak"
+      },
+      {
+        "pattern": "/mobile/plugin/",
+        "cve": "N/A",
+        "description": "泛微移动插件",
+        "severity": "high",
+        "category": "AuthBypass"
+      },
+      {
+        "pattern": "ssoToken",
+        "cve": "N/A",
+        "description": "泛微SSO令牌",
+        "severity": "high",
+        "category": "AuthBypass"
+      }
+    ],
+    "tongda": [
+      {
+        "pattern": "/general/login_code.php",
+        "cve": "CNVD-2021-33202",
+        "description": "通达OA登录验证码绕过",
+        "severity": "critical",
+        "category": "AuthBypass"
+      },
+      {
+        "pattern": "code_uid",
+        "cve": "CNVD-2021-33202",
+        "description": "通达验证码UID",
+        "severity": "critical",
+        "category": "AuthBypass"
+      },
+      {
+        "pattern": "/ispirit/interface/gateway.php",
+        "cve": "CNVD-2020-27269",
+        "description": "通达OA Gateway RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "gateway.php",
+        "cve": "CNVD-2020-27269",
+        "description": "通达网关接口",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "ispirit",
+        "cve": "CNVD-2020-27269",
+        "description": "通达iSpirit接口",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "json={",
+        "cve": "CNVD-2020-27269",
+        "description": "通达JSON注入",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "get_file.php",
+        "cve": "CNVD-2020-27268",
+        "description": "通达OA文件读取",
+        "severity": "critical",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "FILE_PATH=",
+        "cve": "CNVD-2020-27268",
+        "description": "通达文件路径参数",
+        "severity": "critical",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "/module/appbuilder/",
+        "cve": "CNVD-2021-33202",
+        "description": "通达OA模块构建器",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "appbuilder",
+        "cve": "CNVD-2021-33202",
+        "description": "通达AppBuilder",
+        "severity": "high",
+        "category": "RCE"
+      },
+      {
+        "pattern": "upload.php",
+        "cve": "N/A",
+        "description": "通达文件上传",
+        "severity": "high",
+        "category": "FileWrite"
+      }
+    ],
+    "yonyou": [
+      {
+        "pattern": "/servlet/~ic/",
+        "cve": "CNVD-2021-33202",
+        "description": "用友NC Servlet RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "~ic",
+        "cve": "CNVD-2021-33202",
+        "description": "用友IC Servlet",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "bsh.servlet",
+        "cve": "CNVD-2021-33202",
+        "description": "用友BeanShell RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "downloadfile",
+        "cve": "N/A",
+        "description": "用友文件下载",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "filedownload",
+        "cve": "N/A",
+        "description": "用友文件下载",
+        "severity": "high",
+        "category": "FileRead"
+      },
+      {
+        "pattern": "NCFindWeb",
+        "cve": "N/A",
+        "description": "用友NC查找",
+        "severity": "high",
+        "category": "SQLi"
+      }
+    ],
+    "landray": [
+      {
+        "pattern": "/sys/ui/extend/varkind/custom.jsp",
+        "cve": "CNVD-2021-33202",
+        "description": "蓝凌OA SSRF/RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "varkind",
+        "cve": "CNVD-2021-33202",
+        "description": "蓝凌变量类型",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "custom.jsp",
+        "cve": "CNVD-2021-33202",
+        "description": "蓝凌自定义页面",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "download.jsp",
+        "cve": "N/A",
+        "description": "蓝凌文件下载",
+        "severity": "high",
+        "category": "FileRead"
+      }
+    ],
+    "weblogic": [
+      {
+        "pattern": "/wls-wsat/",
+        "cve": "CVE-2017-10271",
+        "description": "WebLogic反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "/_async/",
+        "cve": "CVE-2019-2725",
+        "description": "WebLogic反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "weblogic.jms.common.StreamMessageImpl",
+        "cve": "CVE-2015-4852",
+        "description": "WebLogic反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "weblogic.corba.utils.iiop",
+        "cve": "CVE-2020-2551",
+        "description": "WebLogic IIOP反序列化",
+        "severity": "critical",
+        "category": "Deserialization"
+      },
+      {
+        "pattern": "/console/",
+        "cve": "N/A",
+        "description": "WebLogic控制台",
+        "severity": "high",
+        "category": "InfoLeak"
+      }
+    ],
+    "struts2": [
+      {
+        "pattern": "Content-Type:",
+        "cve": "CVE-2017-5638",
+        "description": "Struts2 S2-045",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "%{#context",
+        "cve": "CVE-2017-5638",
+        "description": "Struts2 OGNL注入",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "#_memberAccess",
+        "cve": "N/A",
+        "description": "Struts2 OGNL注入",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "#cmd=",
+        "cve": "N/A",
+        "description": "Struts2命令执行",
+        "severity": "critical",
+        "category": "RCE"
+      }
+    ],
+    "tomcat": [
+      {
+        "pattern": "/manager/html",
+        "cve": "N/A",
+        "description": "Tomcat管理界面",
+        "severity": "high",
+        "category": "AuthBypass"
+      },
+      {
+        "pattern": "/manager/status",
+        "cve": "N/A",
+        "description": "Tomcat状态页",
+        "severity": "medium",
+        "category": "InfoLeak"
+      },
+      {
+        "pattern": "/host-manager/html",
+        "cve": "N/A",
+        "description": "Tomcat主机管理",
+        "severity": "high",
+        "category": "AuthBypass"
+      },
+      {
+        "pattern": "PUT /",
+        "cve": "CVE-2017-12615",
+        "description": "Tomcat PUT上传",
+        "severity": "critical",
+        "category": "FileWrite"
+      }
+    ],
+    "thinkphp": [
+      {
+        "pattern": "think\\app",
+        "cve": "N/A",
+        "description": "ThinkPHP RCE",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "think\\Container",
+        "cve": "N/A",
+        "description": "ThinkPHP容器注入",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "think\\template",
+        "cve": "N/A",
+        "description": "ThinkPHP模板注入",
+        "severity": "high",
+        "category": "RCE"
+      },
+      {
+        "pattern": "/index.php?s=",
+        "cve": "N/A",
+        "description": "ThinkPHP URL模式",
+        "severity": "medium",
+        "category": "InfoLeak"
+      }
+    ],
+    "solr": [
+      {
+        "pattern": "/solr/admin/cores",
+        "cve": "CVE-2019-0193",
+        "description": "Solr远程代码执行",
+        "severity": "critical",
+        "category": "RCE"
+      },
+      {
+        "pattern": "configset",
+        "cve": "N/A",
+        "description": "Solr配置注入",
+        "severity": "high",
+        "category": "RCE"
+      },
+      {
+        "pattern": "dataimport",
+        "cve": "CVE-2019-0193",
+        "description": "Solr DataImport RCE",
+        "severity": "critical",
+        "category": "RCE"
+      }
+    ]
+  }
+}

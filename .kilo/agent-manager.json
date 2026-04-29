@@ -1,0 +1,37 @@
+{
+  "worktrees": {
+    "wt-1777450854165-1": {
+      "branch": "continuous-nut",
+      "path": "c:\\Users\\LK\\Desktop\\system_check\\.kilo\\worktrees\\continuous-nut",
+      "parentBranch": "main",
+      "createdAt": "2026-04-29T08:20:54.165Z",
+      "remote": "origin"
+    },
+    "wt-1777450881348-2": {
+      "branch": "cool-kookaburra",
+      "path": "c:\\Users\\LK\\Desktop\\system_check\\.kilo\\worktrees\\cool-kookaburra",
+      "parentBranch": "main",
+      "createdAt": "2026-04-29T08:21:21.348Z",
+      "remote": "origin"
+    }
+  },
+  "sessions": {
+    "ses_227ac5183ffe1wSnHaMxGpkoy1": {
+      "worktreeId": "wt-1777450854165-1",
+      "createdAt": "2026-04-29T08:20:56.090Z"
+    },
+    "ses_227abbd67ffePqrtmsCViyJcfc": {
+      "worktreeId": "wt-1777450881348-2",
+      "createdAt": "2026-04-29T08:21:34.058Z"
+    }
+  },
+  "tabOrder": {
+    "local": [
+      "pending:1"
+    ]
+  },
+  "worktreeOrder": [
+    "wt-1777450854165-1",
+    "wt-1777450881348-2"
+  ]
+}
