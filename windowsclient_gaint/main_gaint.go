@@ -52,6 +52,14 @@ type AttackPatternsResponse struct {
 	Error    string                    `json:"error"`
 }
 
+// Action 修复动作定义
+type Action struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+	RiskLevel   string `json:"risk_level"`
+	Category    string `json:"category"`
+}
+
 func init() {
 	keywordsRegex = regexp.MustCompile(`(powershell.*-enc|cmd\.exe|certutil|bitsadmin|wmic|vssadmin|net user|net group|net localgroup|whoami|ipconfig|sc stop|sc delete|reg add|reg delete|rundll32|mshta|cscript|wscript)`)
 	attackPatterns = make(map[string][]AttackPattern)
