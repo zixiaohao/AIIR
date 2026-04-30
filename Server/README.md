@@ -51,7 +51,7 @@ pip install flask boto3 pycryptodome requests
 ```json
 {
   "ai_models": {
-    "default": "deepseek",
+    "default": "deepseek-flash",
     "models": {
       "deepseek": {
         "name": "DeepSeek",
@@ -108,7 +108,7 @@ GET /health
 {
   "status": "ok",
   "timestamp": "2024-01-01T12:00:00",
-  "default_model": "deepseek",
+  "default_model": "deepseek-flash",
   "enabled_models": ["deepseek"]
 }
 ```

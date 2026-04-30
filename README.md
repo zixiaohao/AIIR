@@ -216,7 +216,7 @@ pip install flask requests boto3
 python ai_manager.py list                    # 查看所有模型
 python ai_manager.py set-key deepseek sk-xxx  # 设置API密钥
 python ai_manager.py enable deepseek          # 启用模型
-python ai_manager.py set-default deepseek     # 设置默认模型
+python ai_manager.py set-default deepseek-flash  # 设置默认模型
 
 # 启动服务
 python server.py

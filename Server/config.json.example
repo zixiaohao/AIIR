@@ -4,7 +4,7 @@
     "host": "0.0.0.0"
   },
   "ai_models": {
-    "default": "deepseek",
+    "default": "deepseek-flash",
     "full_analysis_model": "mimo",
     "models": {
       "deepseek-flash": {

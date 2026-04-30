@@ -194,6 +194,21 @@ setup_git_proxy() {
     fi
 }
 
+# GitHub 加速镜像列表（按优先级排序，全部为免登录公开镜像）
+GITHUB_MIRRORS=(
+    "https://ghfast.top/https://github.com/zixiaohao/AIIR.git"
+    "https://ghproxy.net/https://github.com/zixiaohao/AIIR.git"
+    "https://gh-proxy.com/https://github.com/zixiaohao/AIIR.git"
+    "https://ghproxy.cc/https://github.com/zixiaohao/AIIR.git"
+    "https://mirror.ghproxy.com/https://github.com/zixiaohao/AIIR.git"
+    "https://raw.githubusercontent.com/https://github.com/zixiaohao/AIIR.git"
+    "https://gitee.com/zixiaohao/aiir.git"
+)
+
+# 禁止 git 弹出密码输入框，超时 10 秒
+export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=echo
+
 # 带加速器回退的 git fetch
 # 参数: $1=仓库目录  $2=分支名(默认main)
 git_fetch_with_fallback() {
@@ -201,38 +216,36 @@ git_fetch_with_fallback() {
     local branch="${2:-main}"
     cd "$repo_dir"
 
-    # 第一次尝试：GitHub 原地址
+    # 保存原始 URL，确保最后一定能恢复
+    local original_url
+    original_url=$(git remote get-url origin 2>/dev/null)
+
+    # 第一次尝试：当前 origin（可能是 GitHub 直连）
     log_info "尝试从 GitHub 拉取..."
-    if git fetch origin "$branch" 2>/dev/null; then
+    if timeout 15 git fetch origin "$branch" 2>/dev/null; then
         log_success "GitHub 拉取成功"
+        # 确保 origin 是 GitHub 地址
+        git remote set-url origin "$REPO_URL" 2>/dev/null
         return 0
     fi
 
-    # 第二次尝试：ghproxy 加速器
-    local ghproxy_url="https://ghproxy.net/https://github.com/zixiaohao/AIIR.git"
-    log_warn "GitHub 直连失败，尝试 ghproxy 加速器..."
-    git remote set-url origin "$ghproxy_url" 2>/dev/null
-    if git fetch origin "$branch" 2>/dev/null; then
-        log_success "ghproxy 加速拉取成功"
-        # 恢复原地址，避免下次还走加速器
-        git remote set-url origin "$REPO_URL"
-        return 0
-    fi
-
-    # 第三次尝试：Gitee 镜像
-    local gitee_url="https://gitee.com/zixiaohao/aiir.git"
-    log_warn "ghproxy 失败，尝试 Gitee 镜像..."
-    git remote set-url origin "$gitee_url"
-    if git fetch origin "$branch" 2>/dev/null; then
-        log_success "Gitee 镜像拉取成功"
-        # 恢复原地址
-        git remote set-url origin "$REPO_URL"
-        return 0
-    fi
+    # 依次尝试加速镜像
+    for mirror in "${GITHUB_MIRRORS[@]}"; do
+        local mirror_name
+        mirror_name=$(echo "$mirror" | cut -d'/' -f3)
+        log_warn "尝试加速镜像: $mirror_name ..."
+        git remote set-url origin "$mirror"
+        if timeout 20 git fetch origin "$branch" 2>/dev/null; then
+            log_success "$mirror_name 拉取成功"
+            git remote set-url origin "$REPO_URL"
+            return 0
+        fi
+    done
 
     # 全部失败，恢复原地址
     git remote set-url origin "$REPO_URL"
-    log_error "所有拉取方式均失败，请检查网络或手动配置代理"
+    log_error "所有拉取方式均失败（已尝试 GitHub + ${#GITHUB_MIRRORS[@]} 个加速镜像）"
+    log_error "请检查网络或手动配置代理: https_proxy=http://ip:port install.sh"
     return 1
 }
 
@@ -241,32 +254,30 @@ git_fetch_with_fallback() {
 git_clone_with_fallback() {
     local target_dir="$1"
 
-    # 第一次尝试：GitHub 原地址
+    # 第一次尝试：GitHub 直连
     log_info "尝试从 GitHub 克隆..."
-    if git clone "$REPO_URL" "$target_dir" 2>/dev/null; then
+    if timeout 30 git clone "$REPO_URL" "$target_dir" 2>/dev/null; then
         log_success "GitHub 克隆成功"
         return 0
     fi
 
-    # 第二次尝试：ghproxy 加速器
-    local ghproxy_url="https://ghproxy.net/https://github.com/zixiaohao/AIIR.git"
-    log_warn "GitHub 直连失败，尝试 ghproxy 加速器..."
-    if git clone "$ghproxy_url" "$target_dir" 2>/dev/null; then
-        log_success "ghproxy 加速克隆成功"
-        cd "$target_dir" && git remote set-url origin "$REPO_URL"
-        return 0
-    fi
+    # 依次尝试加速镜像
+    for mirror in "${GITHUB_MIRRORS[@]}"; do
+        local mirror_name
+        mirror_name=$(echo "$mirror" | cut -d'/' -f3)
+        log_warn "尝试加速镜像: $mirror_name ..."
+        if timeout 30 git clone "$mirror" "$target_dir" 2>/dev/null; then
+            log_success "$mirror_name 克隆成功"
+            # 确保 origin 恢复为 GitHub 地址
+            cd "$target_dir" && git remote set-url origin "$REPO_URL"
+            return 0
+        fi
+        # 清理失败的半成品目录
+        rm -rf "$target_dir" 2>/dev/null
+    done
 
-    # 第三次尝试：Gitee 镜像
-    local gitee_url="https://gitee.com/zixiaohao/aiir.git"
-    log_warn "ghproxy 失败，尝试 Gitee 镜像..."
-    if git clone "$gitee_url" "$target_dir" 2>/dev/null; then
-        log_success "Gitee 镜像克隆成功"
-        cd "$target_dir" && git remote set-url origin "$REPO_URL"
-        return 0
-    fi
-
-    log_error "所有克隆方式均失败，请检查网络或手动配置代理"
+    log_error "所有克隆方式均失败（已尝试 GitHub + ${#GITHUB_MIRRORS[@]} 个加速镜像）"
+    log_error "请检查网络或手动配置代理: https_proxy=http://ip:port install.sh"
     return 1
 }
 
