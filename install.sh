@@ -1226,6 +1226,329 @@ service_menu() {
 }
 
 # -----------------------------------------------------------------------------
+# 系统管理（模型/限流/黑名单，操作 /etc/aiir/config.json）
+# -----------------------------------------------------------------------------
+
+# 通用 JSON 读取辅助
+_cfg_get() {
+    CFG_FILE="$CONFIG_DIR/config.json" CFG_PATH="$1" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+path = os.environ['CFG_PATH'].split('.')
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+for k in path:
+    if isinstance(c, dict):
+        c = c.get(k, {})
+    else:
+        c = {}
+        break
+if isinstance(c, (dict, list)):
+    print(json.dumps(c, ensure_ascii=False))
+elif c == {}:
+    print('')
+else:
+    print(c)
+" 2>/dev/null
+}
+
+# 通用 JSON 写入辅助
+_cfg_set_value() {
+    CFG_FILE="$CONFIG_DIR/config.json" CFG_PATH="$1" CFG_VALUE="$2" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+path = os.environ['CFG_PATH'].split('.')
+v = os.environ['CFG_VALUE']
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+ref = c
+for k in path[:-1]:
+    ref = ref.setdefault(k, {})
+# 类型推断
+if v.lower() in ('true','false'): v = v.lower() == 'true'
+elif v.isdigit(): v = int(v)
+ref[path[-1]] = v
+with open(p,'w',encoding='utf-8') as f: json.dump(c,f,indent=2,ensure_ascii=False)
+" 2>/dev/null
+}
+
+# ----- 模型管理 -----
+model_manage_menu() {
+    while true; do
+        echo ""
+        echo -e "${BLUE}============= 模型管理 =============${NC}"
+        echo "1. 查看所有模型"
+        echo "2. 启用模型"
+        echo "3. 禁用模型"
+        echo "4. 设置默认模型"
+        echo "5. 设置一次性分析模型"
+        echo "6. 修改模型 API 密钥"
+        echo "0. 返回上级"
+        echo ""
+        echo -n "请输入选项 [0-6]: "
+        read sub
+
+        case $sub in
+            1)
+                echo ""
+                CFG_FILE="$CONFIG_DIR/config.json" python3 -c "
+import json, os
+with open(os.environ['CFG_FILE'],'r',encoding='utf-8') as f: c = json.load(f)
+default = c.get('ai_models',{}).get('default','')
+full = c.get('ai_models',{}).get('full_analysis_model','')
+print(f'  默认模型: {default}')
+print(f'  一次性分析模型: {full}')
+print()
+print(f'  {\"KEY\":20s} {\"NAME\":20s} {\"MODEL\":20s} {\"KEY_STATUS\":12s} {\"STATUS\":8s}')
+print('  ' + '-'*82)
+for k,m in c.get('ai_models',{}).get('models',{}).items():
+    ak = m.get('api_key','')
+    ks = '已配置' if ak and ak != 'YOUR_API_KEY_HERE' else '未配置'
+    st = '启用' if m.get('enabled') else '禁用'
+    dm = ' [默认]' if k == default else ''
+    print(f'  {k:20s} {m.get(\"name\",\"\"):20s} {m.get(\"model_name\",\"\"):20s} {ks:12s} {st}{dm}')
+print()
+" 2>/dev/null
+                ;;
+            2)
+                read -p "  输入要启用的模型 key: " mk
+                if [ -n "$mk" ]; then
+                    _cfg_set_value "ai_models.models.$mk.enabled" "true"
+                    log_success "模型 [$mk] 已启用（重启服务后生效）"
+                fi
+                ;;
+            3)
+                read -p "  输入要禁用的模型 key: " mk
+                if [ -n "$mk" ]; then
+                    local def
+                    def=$(_cfg_get "ai_models.default")
+                    if [ "$mk" = "$def" ]; then
+                        log_error "不能禁用默认模型，请先切换默认模型"
+                    else
+                        _cfg_set_value "ai_models.models.$mk.enabled" "false"
+                        log_success "模型 [$mk] 已禁用（重启服务后生效）"
+                    fi
+                fi
+                ;;
+            4)
+                read -p "  输入新的默认模型 key: " mk
+                if [ -n "$mk" ]; then
+                    _cfg_set_value "ai_models.default" "$mk"
+                    log_success "默认模型已设置为 [$mk]（重启服务后生效）"
+                fi
+                ;;
+            5)
+                read -p "  输入一次性分析模型 key: " mk
+                if [ -n "$mk" ]; then
+                    _cfg_set_value "ai_models.full_analysis_model" "$mk"
+                    log_success "一次性分析模型已设置为 [$mk]（重启服务后生效）"
+                fi
+                ;;
+            6)
+                read -p "  输入模型 key: " mk
+                if [ -n "$mk" ]; then
+                    read -p "  输入新的 API 密钥: " ak
+                    if [ -n "$ak" ]; then
+                        _cfg_set_value "ai_models.models.$mk.api_key" "$ak"
+                        log_success "模型 [$mk] API 密钥已更新（重启服务后生效）"
+                    fi
+                fi
+                ;;
+            0) return ;;
+            *) log_error "无效选项" ;;
+        esac
+
+        echo ""
+        read -p "按 Enter 键继续..." dummy
+    done
+}
+
+# ----- IP限流管理 -----
+rate_limit_menu() {
+    while true; do
+        echo ""
+        echo -e "${BLUE}============= IP 限流管理 =============${NC}"
+        echo "1. 查看限流配置"
+        echo "2. 启用/禁用限流"
+        echo "3. 设置每IP最大请求数"
+        echo "4. 设置时间窗口（小时）"
+        echo "0. 返回上级"
+        echo ""
+        echo -n "请输入选项 [0-4]: "
+        read sub
+
+        case $sub in
+            1)
+                echo ""
+                local rl_enabled rl_max rl_hours
+                rl_enabled=$(_cfg_get "rate_limit.enabled")
+                rl_max=$(_cfg_get "rate_limit.max_requests_per_ip")
+                rl_hours=$(_cfg_get "rate_limit.time_window_hours")
+                echo "  启用状态: $rl_enabled"
+                echo "  每IP最大请求数: $rl_max"
+                echo "  时间窗口(小时): $rl_hours"
+                ;;
+            2)
+                read -p "  启用限流? (true/false): " v
+                if [ -n "$v" ]; then
+                    _cfg_set_value "rate_limit.enabled" "$v"
+                    log_success "限流已设为: $v（重启服务后生效）"
+                fi
+                ;;
+            3)
+                read -p "  每IP最大请求数: " v
+                if [ -n "$v" ]; then
+                    _cfg_set_value "rate_limit.max_requests_per_ip" "$v"
+                    log_success "最大请求数已设为: $v（重启服务后生效）"
+                fi
+                ;;
+            4)
+                read -p "  时间窗口(小时): " v
+                if [ -n "$v" ]; then
+                    _cfg_set_value "rate_limit.time_window_hours" "$v"
+                    log_success "时间窗口已设为: $v 小时（重启服务后生效）"
+                fi
+                ;;
+            0) return ;;
+            *) log_error "无效选项" ;;
+        esac
+
+        echo ""
+        read -p "按 Enter 键继续..." dummy
+    done
+}
+
+# ----- IP黑名单管理 -----
+blacklist_menu() {
+    while true; do
+        echo ""
+        echo -e "${BLUE}============= IP 黑名单管理 =============${NC}"
+        echo "1. 查看黑名单"
+        echo "2. 添加 IP 到黑名单"
+        echo "3. 从黑名单移除 IP"
+        echo "4. 启用/禁用黑名单功能"
+        echo "0. 返回上级"
+        echo ""
+        echo -n "请输入选项 [0-4]: "
+        read sub
+
+        case $sub in
+            1)
+                echo ""
+                CFG_FILE="$CONFIG_DIR/config.json" python3 -c "
+import json, os
+with open(os.environ['CFG_FILE'],'r',encoding='utf-8') as f: c = json.load(f)
+bl = c.get('ip_blacklist',{})
+print(f'  黑名单功能: {\"启用\" if bl.get(\"enabled\") else \"禁用\"}')
+ips = bl.get('blocked_ips',[])
+if not ips:
+    print('  黑名单为空')
+else:
+    print(f'  共 {len(ips)} 个IP:')
+    for i,ip in enumerate(ips,1):
+        print(f'    {i}. {ip}')
+" 2>/dev/null
+                ;;
+            2)
+                read -p "  输入要封禁的 IP: " ip
+                if [ -n "$ip" ]; then
+                    # 验证IP格式
+                    if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                        CFG_FILE="$CONFIG_DIR/config.json" CFG_IP="$ip" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+ip = os.environ['CFG_IP']
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+bl = c.setdefault('ip_blacklist', {'enabled': True, 'blocked_ips': []})
+ips = bl.setdefault('blocked_ips', [])
+if ip in ips:
+    print('EXISTS')
+else:
+    ips.append(ip)
+    with open(p,'w',encoding='utf-8') as f: json.dump(c,f,indent=2,ensure_ascii=False)
+    print('OK')
+" 2>/dev/null
+                        local result=$?
+                        if [ "$result" = "EXISTS" ]; then
+                            log_warn "IP $ip 已在黑名单中"
+                        else
+                            log_success "已将 $ip 添加到黑名单（重启服务后生效）"
+                        fi
+                    else
+                        log_error "无效的 IP 地址格式: $ip"
+                    fi
+                fi
+                ;;
+            3)
+                read -p "  输入要移除的 IP: " ip
+                if [ -n "$ip" ]; then
+                    local removed
+                    removed=$(CFG_FILE="$CONFIG_DIR/config.json" CFG_IP="$ip" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+ip = os.environ['CFG_IP']
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+ips = c.get('ip_blacklist',{}).get('blocked_ips',[])
+if ip in ips:
+    ips.remove(ip)
+    with open(p,'w',encoding='utf-8') as f: json.dump(c,f,indent=2,ensure_ascii=False)
+    print('OK')
+else:
+    print('NOT_FOUND')
+" 2>/dev/null)
+                    if [ "$removed" = "OK" ]; then
+                        log_success "已将 $ip 从黑名单移除（重启服务后生效）"
+                    else
+                        log_warn "IP $ip 不在黑名单中"
+                    fi
+                fi
+                ;;
+            4)
+                read -p "  启用黑名单? (true/false): " v
+                if [ -n "$v" ]; then
+                    _cfg_set_value "ip_blacklist.enabled" "$v"
+                    log_success "黑名单功能已设为: $v（重启服务后生效）"
+                fi
+                ;;
+            0) return ;;
+            *) log_error "无效选项" ;;
+        esac
+
+        echo ""
+        read -p "按 Enter 键继续..." dummy
+    done
+}
+
+# 系统管理主菜单
+system_manage_menu() {
+    if [ ! -f "$CONFIG_DIR/config.json" ]; then
+        log_error "配置文件不存在，请先部署服务端"
+        return 1
+    fi
+
+    while true; do
+        echo ""
+        echo -e "${BLUE}============================================================${NC}"
+        echo -e "${BLUE}         系统管理${NC}"
+        echo -e "${BLUE}============================================================${NC}"
+        echo ""
+        echo "1. AI 模型管理 (启用/禁用/切换默认/密钥)"
+        echo "2. IP 限流管理 (请求频率限制)"
+        echo "3. IP 黑名单管理 (封禁/解封 IP)"
+        echo "0. 返回主菜单"
+        echo ""
+        echo -n "请输入选项 [0-3]: "
+        read sub
+
+        case $sub in
+            1) model_manage_menu ;;
+            2) rate_limit_menu ;;
+            3) blacklist_menu ;;
+            0) return ;;
+            *) log_error "无效选项" ;;
+        esac
+    done
+}
+
+# -----------------------------------------------------------------------------
 # 显示状态
 # -----------------------------------------------------------------------------
 
@@ -1278,12 +1601,13 @@ show_menu() {
     echo "2. 编译客户端 (exe编译 + Linux打包)"
     echo "3. 更新版本 (停止服务 + 拉取代码 + 重建)"
     echo "4. 服务控制 (启动/停止/重启/日志)"
-    echo "5. 查看状态"
+    echo "5. 系统管理 (模型/限流/黑名单)"
     echo "6. 配置向导 (修改API密钥/对象存储)"
-    echo "7. 卸载"
+    echo "7. 查看状态"
+    echo "8. 卸载"
     echo "0. 退出"
     echo ""
-    echo -n "请输入选项 [0-7]: "
+    echo -n "请输入选项 [0-8]: "
 }
 
 # 卸载
@@ -1361,12 +1685,15 @@ main() {
                 service_menu
                 ;;
             5)
-                show_status
+                system_manage_menu
                 ;;
             6)
                 interactive_config
                 ;;
             7)
+                show_status
+                ;;
+            8)
                 uninstall
                 ;;
             0)

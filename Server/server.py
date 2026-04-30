@@ -555,7 +555,7 @@ def full_analysis(log_content, hostname, ip_info, model_key=None):
 {whitelist}
 
 要求：
-1. 给出整体安全评分（0-100分）
+1. 给出整体安全评分（百分制，100分为完全安全，分数越低安全性越差：90+优秀 70-89良好 50-69一般 50以下危险）
 2. 按风险等级（高/中/低）列出发现的问题
 3. 给出具体的处置建议和修复方案
 4. 输出格式为Markdown
@@ -904,7 +904,7 @@ def analyze_summary_api():
             expert_role = "你是一名高级Linux安全应急响应专家"
         
         final_system_prompt = f"""{expert_role}。我将提供一份自动化巡检分项分析汇总。请基于这些汇总信息，进行最终的综合研判。{whitelist} 
-要求：1. 给出整体安全评分。2. 按优先级列出威胁。3. 给出处置建议。4. 输出格式为Markdown。"""
+要求：1. 给出整体安全评分（百分制，100分为完全安全，分数越低安全性越差）。2. 按优先级列出威胁。3. 给出处置建议。4. 输出格式为Markdown。"""
         
         meta_info = f"主机名: {hostname}, IP: {ip_info}, 平台: {platform}, 分析时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         final_content = f"主机元数据：{meta_info}\n\n分项分析汇总如下：\n{full_summary}"
@@ -1318,7 +1318,7 @@ def analyze_with_actions_content(log_content, hostname, ip_info, model_key):
 {whitelist}
 
 ### 分析要求：
-1. 给出整体安全评分（0-100分，100分为最安全）
+1. 给出整体安全评分（百分制，100分为完全安全，分数越低安全性越差：90+优秀 70-89良好 50-69一般 50以下危险）
 2. 按风险等级（高危/中危/低危/正常）分类列出发现的问题
 3. 对每个问题提供详细的处置建议和修复方案
 
@@ -1445,7 +1445,7 @@ def analyze_full_content(log_content, hostname, ip_info, model_key):
 {whitelist}
 
 分析要求：
-1. 给出整体安全评分（0-100分，100分为最安全）
+1. 给出整体安全评分（百分制，100分为完全安全，分数越低安全性越差：90+优秀 70-89良好 50-69一般 50以下危险）
 2. 按风险等级（高危/中危/低危/正常）分类列出发现的问题
 3. 对每个问题提供：
    - 问题描述
