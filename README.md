@@ -27,20 +27,16 @@ system_check/
 │   ├── client.sh              # 主脚本
 │   ├── busybox                # 兼容性工具
 │   └── vuln                   # 漏洞检测工具
-├── linuxclient_gaint/         # Linux增强客户端（一次性分析版）
-│   ├── client_gaint.sh        # 增强版主脚本
-│   ├── action_executor.sh     # 自动操作执行器（逐条确认执行AI建议的修复命令）
+├── linuxclient_gaint/         # Linux增强客户端（一次性分析 + 自动修复）
+│   ├── client_gaint.sh        # 增强版主脚本（已集成自动修复执行器）
 │   ├── busybox
 │   └── vuln
 ├── winClient/                 # Windows客户端（分批分析版）
 │   ├── main.go                # Go源码
 │   ├── go.mod / go.sum        # Go模块依赖
 │   └── README.md              # Windows客户端说明
-├── windowsclient_gaint/       # Windows增强客户端（一次性分析版）
-│   ├── main_gaint.go          # 增强版Go源码
-│   ├── action_executor_gaint.go # 自动操作执行器（逐条确认执行AI建议的修复命令）
-│   ├── main_gaint_part2.go    # 源码分片
-│   ├── main_gaint_merged.go   # 合并后源码
+├── windowsclient_gaint/       # Windows增强客户端（一次性分析 + 自动修复）
+│   ├── main_gaint.go          # 增强版Go源码（已集成自动修复执行器）
 │   ├── go.mod / go.sum
 │   └── README.md
 ├── .gitignore
@@ -317,27 +313,22 @@ gaint版本的增强客户端支持**自动操作**功能，AI分析后会返回
 ```bash
 # 1. 启动增强版客户端（会自动调用/analyze_with_actions接口）
 cd linuxclient_gaint
-chmod +x client_gaint.sh action_executor.sh
+chmod +x client_gaint.sh
 ./client_gaint.sh
 
-# 2. 分析完成后，自动进入命令执行流程
-#    或手动调用执行器
-./action_executor.sh response.json
+# 2. 分析完成后，自动进入命令执行流程（逐条确认）
+#    执行器已集成到主脚本中，无需单独调用
 ```
 
 #### Windows客户端
 
 ```bash
-# 1. 编译执行器
+# 1. 启动增强版客户端（会自动调用/analyze_with_actions接口）
 cd windowsclient_gaint
-go build -o action_executor_gaint.exe action_executor_gaint.go
-
-# 2. 启动增强版客户端（会自动调用/analyze_with_actions接口）
 go run main_gaint.go -s http://server:8000
 
-# 3. 分析完成后，自动进入命令执行流程
-#    或手动调用执行器
-action_executor_gaint.exe -f response.json
+# 2. 分析完成后，自动进入命令执行流程（逐条确认）
+#    执行器已集成到主程序中，无需单独编译
 ```
 
 ### 命令格式

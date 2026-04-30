@@ -405,45 +405,161 @@ with open(os.environ['ANALYSIS_FILE'], 'w', encoding='utf-8') as f:
             echo "[警告] 分析报告文件不存在: $analysis_file"
         fi
         
+        # ============================================================
+        # 自动修复命令执行器（集成到主程序）
+        # ============================================================
+        
+        # 颜色定义
+        _EXEC_RED='\033[0;31m'
+        _EXEC_GREEN='\033[0;32m'
+        _EXEC_YELLOW='\033[0;33m'
+        _EXEC_BLUE='\033[0;34m'
+        _EXEC_CYAN='\033[0;36m'
+        _EXEC_NC='\033[0m'
+        _EXEC_BOLD='\033[1m'
+        
+        _EXECUTED_COUNT=0
+        _SKIPPED_COUNT=0
+        _FAILED_COUNT=0
+        
+        _exec_show_action_detail() {
+            local index=$1 total=$2 description=$3 command=$4 risk_level=$5 category=$6
+            echo ""
+            echo "════════════════════════════════════════════"
+            echo -e "  ${_EXEC_BOLD}操作 [$index/$total]${_EXEC_NC}"
+            echo "════════════════════════════════════════════"
+            case "$risk_level" in
+                high)   echo -e "  ${_EXEC_RED}${_EXEC_BOLD}风险等级: 🔴 高危${_EXEC_NC}" ;;
+                medium) echo -e "  ${_EXEC_YELLOW}${_EXEC_BOLD}风险等级: 🟡 中危${_EXEC_NC}" ;;
+                low)    echo -e "  ${_EXEC_GREEN}${_EXEC_BOLD}风险等级: 🟢 低危${_EXEC_NC}" ;;
+                *)      echo -e "  风险等级: ⚪ 未知" ;;
+            esac
+            echo -e "  ${_EXEC_BLUE}类别:${_EXEC_NC} $category"
+            echo ""
+            echo -e "  ${_EXEC_BOLD}描述:${_EXEC_NC} $description"
+            echo ""
+            echo -e "  ${_EXEC_CYAN}命令:${_EXEC_NC} ${_EXEC_BOLD}$command${_EXEC_NC}"
+            if [ "$risk_level" = "high" ]; then
+                echo ""
+                echo -e "  ${_EXEC_RED}${_EXEC_BOLD}⚠️  高风险操作警告！此操作可能会对系统产生重大影响。${_EXEC_NC}"
+            fi
+            echo "════════════════════════════════════════════"
+        }
+        
+        _exec_run_command() {
+            local command=$1 description=$2 risk_level=$3 category=$4 index=$5 total=$6
+            _exec_show_action_detail "$index" "$total" "$description" "$command" "$risk_level" "$category"
+            
+            if [ "$risk_level" = "high" ]; then
+                echo ""
+                echo -ne "${_EXEC_RED}⚠️  高风险操作，请再次输入 YES 确认执行:${_EXEC_NC} "
+                read -r double_confirm
+                if [ "$double_confirm" != "YES" ]; then
+                    echo -e "${_EXEC_YELLOW}↻ 已跳过${_EXEC_NC}"; _SKIPPED_COUNT=$((_SKIPPED_COUNT+1)); return
+                fi
+            fi
+            
+            echo ""
+            echo -ne "${_EXEC_CYAN}是否执行此操作? (y=执行 / n=跳过) [默认: n]:${_EXEC_NC} "
+            read -r confirm
+            case "$confirm" in
+                y|Y|yes|YES)
+                    echo ""; echo -e "${_EXEC_BLUE}正在执行...${_EXEC_NC}"
+                    output=$(eval "$command" 2>&1)
+                    exit_code=$?
+                    if [ $exit_code -eq 0 ]; then
+                        echo -e "${_EXEC_GREEN}✅ 执行成功${_EXEC_NC}"
+                        [ -n "$output" ] && echo "$output" | head -20
+                        _EXECUTED_COUNT=$((_EXECUTED_COUNT+1))
+                    else
+                        echo -e "${_EXEC_RED}❌ 执行失败 (退出码: $exit_code)${_EXEC_NC}"
+                        [ -n "$output" ] && echo "$output" | head -10
+                        _FAILED_COUNT=$((_FAILED_COUNT+1))
+                    fi ;;
+                *)
+                    echo -e "${_EXEC_YELLOW}↻ 已跳过${_EXEC_NC}"; _SKIPPED_COUNT=$((_SKIPPED_COUNT+1)) ;;
+            esac
+        }
+        
+        _exec_actions_inline() {
+            local response_data="$1"
+            
+            local actions_json
+            actions_json=$(echo "$response_data" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+actions = data.get('actions', [])
+if not actions:
+    report = data.get('analysis_report', '')
+    if report:
+        import re
+        for block in re.findall(r'\`\`\`json\s*\n(.*?)\n\`\`\`', report, re.DOTALL):
+            try:
+                parsed = json.loads(block.strip())
+                if isinstance(parsed, list): actions = parsed; break
+            except: pass
+print(json.dumps(actions))
+" 2>/dev/null || echo '[]')
+            
+            local action_count
+            action_count=$(echo "$actions_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+            
+            if [ -z "$action_count" ] || [ "$action_count" = "0" ]; then
+                echo -e "${_EXEC_YELLOW}⚠️  没有发现可执行的修复操作。${_EXEC_NC}"; return
+            fi
+            
+            echo ""
+            echo "=============================================="
+            echo "     🛠️  自动修复命令执行器"
+            echo "     逐条确认 · 安全可控"
+            echo "=============================================="
+            echo ""
+            echo -e "${_EXEC_GREEN}发现 $action_count 条建议修复操作${_EXEC_NC}"
+            echo -e "${_EXEC_YELLOW}请逐条确认是否执行:${_EXEC_NC}"
+            echo ""
+            
+            for i in $(seq 1 "$action_count"); do
+                local idx=$((i-1))
+                local item cmd desc risk cat
+                item=$(echo "$actions_json" | python3 -c "import sys,json;a=json.load(sys.stdin);print(json.dumps(a[$idx]) if $idx<len(a) else '{}')" 2>/dev/null)
+                cmd=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('command',''))" 2>/dev/null)
+                desc=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('description',''))" 2>/dev/null)
+                risk=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('risk_level','medium'))" 2>/dev/null)
+                cat=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('category','general'))" 2>/dev/null)
+                [ -n "$cmd" ] && _exec_run_command "$cmd" "$desc" "$risk" "$cat" "$i" "$action_count"
+                echo ""
+            done
+            
+            echo ""
+            echo "=============================================="
+            echo "     执行总结"
+            echo "=============================================="
+            echo -e "  ${_EXEC_GREEN}✅ 已执行: $_EXECUTED_COUNT${_EXEC_NC}"
+            echo -e "  ${_EXEC_YELLOW}↻ 已跳过: $_SKIPPED_COUNT${_EXEC_NC}"
+            echo -e "  ${_EXEC_RED}❌ 执行失败: $_FAILED_COUNT${_EXEC_NC}"
+            local total=$((_EXECUTED_COUNT+_SKIPPED_COUNT+_FAILED_COUNT))
+            [ $total -gt 0 ] && echo -e "  ${_EXEC_BLUE}执行率: $((_EXECUTED_COUNT*100/total))%${_EXEC_NC}"
+            echo "=============================================="
+            echo ""
+        }
+        
         # =========================================================
-        #                   自动修复操作执行（新增）
+        #                   自动修复操作调用
         # =========================================================
         echo ""
         echo "=========================================="
         echo "         🛠️  自动修复操作建议              "
         echo "=========================================="
         
-        # 检查是否有 actions
         actions_count=$(echo "$response" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('actions', [])))" 2>/dev/null || echo "0")
         
         if [ -n "$actions_count" ] && [ "$actions_count" != "0" ]; then
             echo "[信息] AI分析了 $actions_count 条可执行的修复操作"
             echo ""
-            
-            # 询问用户是否执行自动修复操作
             read -p "是否执行自动修复操作？每条操作都会单独确认 (y/n): " execute_actions
             
             if [[ "$execute_actions" == "y" || "$execute_actions" == "Y" || "$execute_actions" == "yes" || "$execute_actions" == "YES" ]]; then
-                # 保存 actions 到临时文件
-                actions_file="${input_string}_actions.json"
-                echo "$response" > "$actions_file"
-                echo "[信息] 已生成操作文件: $actions_file"
-                
-                # 检查 action_executor.sh 是否存在
-                if [ -f "./action_executor.sh" ]; then
-                    chmod +x ./action_executor.sh
-                    echo "[信息] 正在调用 action_executor.sh 执行操作..."
-                    echo ""
-                    
-                    # 调用 action_executor.sh 执行操作
-                    ./action_executor.sh "$actions_file"
-                    
-                    echo ""
-                    echo "[信息] 自动修复操作执行完成"
-                else
-                    echo "[警告] 未找到 action_executor.sh 脚本，无法执行自动修复"
-                    echo "[提示] 请确保 action_executor.sh 与本脚本在同一目录下"
-                fi
+                _exec_actions_inline "$response"
             else
                 echo "[信息] 用户取消执行自动修复操作"
             fi

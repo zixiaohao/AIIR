@@ -28,6 +28,12 @@ var (
 	logFile          string
 	keywordsRegex    *regexp.Regexp
 	attackPatterns   map[string][]AttackPattern
+
+	// 执行器统计
+	execExecutedCount = 0
+	execSkippedCount  = 0
+	execFailedCount   = 0
+	execLogFilePath   = ""
 )
 
 // AttackPattern 攻击模式定义
@@ -152,6 +158,238 @@ func fetchAttackPatterns() bool {
 		fmt.Println(" ❌ 失败")
 		fmt.Printf("[警告] %s\n", response.Error)
 		return false
+	}
+}
+
+// ============================================================
+// 自动修复命令执行器（集成到主程序）
+// ============================================================
+
+// logActionExec 记录操作日志
+func logActionExec(status, desc, command, output string) {
+	if execLogFilePath == "" {
+		return
+	}
+	f, err := os.OpenFile(execLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logEntry := fmt.Sprintf("--- [%s] ---\n状态: %s\n描述: %s\n命令: %s\n输出: %s\n\n",
+		timestamp, status, desc, command, output)
+	f.WriteString(logEntry)
+}
+
+// showActionDetailExec 显示操作详情
+func showActionDetailExec(index, total int, description, command, riskLevel, category string) {
+	fmt.Println()
+	fmt.Println("════════════════════════════════════════════")
+	fmt.Printf("  操作 [%d/%d]\n", index, total)
+	fmt.Println("════════════════════════════════════════════")
+
+	switch riskLevel {
+	case "high":
+		fmt.Printf("  风险等级: 🔴 高危\n")
+	case "medium":
+		fmt.Printf("  风险等级: 🟡 中危\n")
+	case "low":
+		fmt.Printf("  风险等级: 🟢 低危\n")
+	default:
+		fmt.Printf("  风险等级: ⚪ 未知\n")
+	}
+
+	fmt.Printf("  类别: %s\n", category)
+	fmt.Println()
+	fmt.Println("  描述:")
+	fmt.Printf("  %s\n", description)
+	fmt.Println()
+	fmt.Println("  命令:")
+	fmt.Printf("  %s\n", command)
+
+	if riskLevel == "high" {
+		fmt.Println()
+		fmt.Println("  ⚠️  高风险操作警告！")
+		fmt.Println("  此操作可能会对系统产生重大影响，请谨慎确认。")
+	}
+	fmt.Println("════════════════════════════════════════════")
+}
+
+// executeCommandExec 执行单条修复命令
+func executeCommandExec(command, description, riskLevel, category string, index, total int) {
+	showActionDetailExec(index, total, description, command, riskLevel, category)
+
+	reader := bufio.NewReader(os.Stdin)
+
+	if riskLevel == "high" {
+		fmt.Println()
+		fmt.Print("⚠️  高风险操作，请再次输入 YES 确认执行: ")
+		doubleConfirm, _ := reader.ReadString('\n')
+		doubleConfirm = strings.TrimSpace(doubleConfirm)
+		if doubleConfirm != "YES" {
+			fmt.Println("↻ 已跳过")
+			execSkippedCount++
+			logActionExec("SKIPPED", description, command, "高风险未确认")
+			return
+		}
+	}
+
+	fmt.Println()
+	fmt.Print("是否执行此操作? (y=执行 / n=跳过 / v=查看详情) [默认: n]: ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(confirm)
+
+	switch strings.ToLower(confirm) {
+	case "y", "yes":
+		fmt.Println()
+		fmt.Println("正在执行...")
+		cmd := exec.Command("cmd", "/c", command)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
+		output, err := cmd.CombinedOutput()
+		outputStr := string(output)
+
+		if err == nil {
+			fmt.Println("✅ 执行成功")
+			if strings.TrimSpace(outputStr) != "" {
+				fmt.Println("输出:")
+				lines := strings.Split(outputStr, "\n")
+				for i, line := range lines {
+					if i >= 20 {
+						fmt.Printf("... (输出已截断，共 %d 行)\n", len(lines))
+						break
+					}
+					fmt.Println(line)
+				}
+			}
+			execExecutedCount++
+			logActionExec("SUCCESS", description, command, outputStr)
+		} else {
+			fmt.Printf("❌ 执行失败: %v\n", err)
+			if strings.TrimSpace(outputStr) != "" {
+				fmt.Println("错误信息:")
+				lines := strings.Split(outputStr, "\n")
+				for i, line := range lines {
+					if i >= 10 {
+						break
+					}
+					fmt.Println(line)
+				}
+			}
+			execFailedCount++
+			logActionExec("FAILED", description, command, fmt.Sprintf("Error: %v\n%s", err, outputStr))
+		}
+
+	case "v", "view":
+		fmt.Println()
+		fmt.Println("预执行详情查看:")
+		fmt.Println("此操作会执行以下命令:")
+		fmt.Printf("  %s\n", command)
+		fmt.Println()
+		fmt.Print("是否执行此操作? (y/n) [默认: n]: ")
+		retryConfirm, _ := reader.ReadString('\n')
+		retryConfirm = strings.TrimSpace(retryConfirm)
+		if strings.ToLower(retryConfirm) == "y" || strings.ToLower(retryConfirm) == "yes" {
+			executeCommandExec(command, description, riskLevel, category, index, total)
+			return
+		}
+		fmt.Println("↻ 已跳过")
+		execSkippedCount++
+		logActionExec("SKIPPED", description, command, "用户跳过")
+
+	default:
+		fmt.Println("↻ 已跳过")
+		execSkippedCount++
+		logActionExec("SKIPPED", description, command, "用户跳过")
+	}
+}
+
+// parseActionsFromReport 从报告的JSON代码块中解析动作
+func parseActionsFromReport(report string) []Action {
+	var actions []Action
+	lines := strings.Split(report, "\n")
+	inJSONBlock := false
+	var jsonLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```json") {
+			inJSONBlock = true
+			jsonLines = nil
+			continue
+		}
+		if inJSONBlock && strings.HasPrefix(trimmed, "```") {
+			inJSONBlock = false
+			jsonStr := strings.Join(jsonLines, "\n")
+			var parsed []Action
+			if err := json.Unmarshal([]byte(jsonStr), &parsed); err == nil {
+				actions = append(actions, parsed...)
+			}
+			continue
+		}
+		if inJSONBlock {
+			jsonLines = append(jsonLines, line)
+		}
+	}
+	return actions
+}
+
+// executeActionsInline 直接在主程序中执行修复动作（不启动外部进程）
+func executeActionsInline(responseData []byte, actions []Action, ticketID string) {
+	if len(actions) == 0 {
+		// 尝试从报告中解析
+		var resp struct {
+			AnalysisReport string `json:"analysis_report"`
+		}
+		json.Unmarshal(responseData, &resp)
+		if resp.AnalysisReport != "" {
+			actions = parseActionsFromReport(resp.AnalysisReport)
+		}
+	}
+
+	if len(actions) == 0 {
+		fmt.Println("⚠️  没有发现可执行的修复操作。")
+		return
+	}
+
+	fmt.Println()
+	fmt.Println("==============================================")
+	fmt.Println("     🛠️  自动修复命令执行器")
+	fmt.Println("     逐条确认 · 安全可控")
+	fmt.Println("==============================================")
+	fmt.Println()
+
+	fmt.Printf("发现 %d 条建议修复操作\n", len(actions))
+	fmt.Println("请逐条确认是否执行:")
+	fmt.Println()
+
+	// 重置统计
+	execExecutedCount = 0
+	execSkippedCount = 0
+	execFailedCount = 0
+	execLogFilePath = fmt.Sprintf("%s_action_log.md", ticketID)
+
+	for i, action := range actions {
+		executeCommandExec(action.Command, action.Description, action.RiskLevel, action.Category, i+1, len(actions))
+		fmt.Println()
+	}
+
+	// 显示总结
+	fmt.Println()
+	fmt.Println("==============================================")
+	fmt.Println("     执行总结")
+	fmt.Println("==============================================")
+	fmt.Printf("  ✅ 已执行: %d\n", execExecutedCount)
+	fmt.Printf("  ↻ 已跳过: %d\n", execSkippedCount)
+	fmt.Printf("  ❌ 执行失败: %d\n", execFailedCount)
+	total := execExecutedCount + execSkippedCount + execFailedCount
+	if total > 0 {
+		fmt.Printf("  执行率: %d%%\n", execExecutedCount*100/total)
+	}
+	fmt.Println("==============================================")
+	fmt.Println()
+
+	if execLogFilePath != "" {
+		fmt.Printf("[日志文件] %s\n", execLogFilePath)
 	}
 }
 
@@ -614,7 +852,7 @@ func sendDataToServer(ticketID, hostname string) {
 		}
 
 		// =========================================================
-		//                   自动修操作执行（新增）
+		//                   自动修操作执行（集成）
 		// =========================================================
 		if len(response.Actions) > 0 {
 			fmt.Println()
@@ -624,41 +862,14 @@ func sendDataToServer(ticketID, hostname string) {
 			fmt.Printf("[信息] AI分析了 %d 条可执行的修复操作\n", len(response.Actions))
 			fmt.Println()
 			
-			// 询问用户是否执行自动修复操作
 			fmt.Print("是否执行自动修复操作？每条操作都会单独确认 (y/n): ")
 			actionReader := bufio.NewReader(os.Stdin)
 			executeActions, _ := actionReader.ReadString('\n')
 			executeActions = strings.TrimSpace(executeActions)
 
 			if strings.ToLower(executeActions) == "y" || strings.ToLower(executeActions) == "yes" {
-				// 保存 actions 到临时文件
-				actionsFile := fmt.Sprintf("%s_actions.json", ticketID)
-				actionsJSON, err := json.MarshalIndent(response, "", "  ")
-				if err != nil {
-					fmt.Printf("[错误] 序列化actions失败: %v\n", err)
-				} else {
-					err = os.WriteFile(actionsFile, actionsJSON, 0644)
-					if err != nil {
-						fmt.Printf("[错误] 保存actions文件失败: %v\n", err)
-					} else {
-						fmt.Printf("[信息] 已生成操作文件: %s\n", actionsFile)
-						fmt.Println("[信息] 正在调用 action_executor_gaint.exe 执行操作...")
-						fmt.Println()
-
-						// 调用 action_executor_gaint.exe 执行操作
-						cmd := exec.Command("action_executor_gaint.exe", "-f", actionsFile)
-						cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
-						cmd.Stdout = os.Stdout
-						cmd.Stderr = os.Stderr
-						cmd.Stdin = os.Stdin
-						err = cmd.Run()
-						if err != nil {
-							fmt.Printf("[警告] action_executor 执行异常: %v\n", err)
-						}
-
-						fmt.Println("[信息] 自动修复操作执行完成")
-					}
-				}
+				// 直接在主程序中执行，不再启动外部进程
+				executeActionsInline(body, response.Actions, ticketID)
 			} else {
 				fmt.Println("[信息] 用户取消执行自动修复操作")
 			}
