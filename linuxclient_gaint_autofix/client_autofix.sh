@@ -242,29 +242,27 @@ if ! command -v curl &> /dev/null; then
   exit 0
 fi
 
-# 提示用户输入Server地址
+# 设置Server地址
 if [ -z "$SERVER_URL" ]; then
     if [ -n "$DEFAULT_SERVER_URL" ]; then
-        read -p "请输入Server地址 (格式: http://IP:端口) [默认: ${DEFAULT_SERVER_URL}]: " input_server
-        SERVER_URL=$(echo "$input_server" | tr -d ' \n\r')
-        if [ -z "$SERVER_URL" ]; then
-            SERVER_URL="$DEFAULT_SERVER_URL"
-        fi
+        # 预置地址，自动使用，跳过输入
+        SERVER_URL="$DEFAULT_SERVER_URL"
+        echo "[Server地址] ${SERVER_URL} (已预置)"
     else
         read -p "请输入Server地址 (格式: http://IP:端口): " input_server
         SERVER_URL=$(echo "$input_server" | tr -d ' \n\r')
+        if [ -z "$SERVER_URL" ]; then
+            echo "[错误] Server地址不能为空！"
+            echo "按任意键退出..."
+            read
+            exit 1
+        fi
+        case "$SERVER_URL" in
+            http://*|https://*) ;;
+            *) SERVER_URL="http://$SERVER_URL" ;;
+        esac
+        echo "[Server地址] ${SERVER_URL}"
     fi
-    if [ -z "$SERVER_URL" ]; then
-        echo "[错误] Server地址不能为空！"
-        echo "按任意键退出..."
-        read
-        exit 1
-    fi
-    case "$SERVER_URL" in
-        http://*|https://*) ;;
-        *) SERVER_URL="http://$SERVER_URL" ;;
-    esac
-    echo "[Server地址] ${SERVER_URL}"
     echo ""
 fi
 

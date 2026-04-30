@@ -189,21 +189,17 @@ func main() {
 	}
 
 	// 设置Server地址
-	if serverAddr == "" {
+	if serverAddr != "" {
+		serverURL = serverAddr
+	} else if defaultServerURL != "" {
+		serverURL = defaultServerURL
+		fmt.Printf("[Server地址] %s (编译时预置)\n", serverURL)
+	} else {
 		reader := bufio.NewReader(os.Stdin)
-		if defaultServerURL != "" {
-			fmt.Printf("请输入Server地址 (格式: http://IP:端口) [默认: %s]: ", defaultServerURL)
-			input, _ := reader.ReadString('\n')
-			serverURL = strings.TrimSpace(input)
-			if serverURL == "" {
-				serverURL = defaultServerURL
-			}
-		} else {
-			fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
-			input, _ := reader.ReadString('\n')
-			serverURL = strings.TrimSpace(input)
-		}
-		
+		fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
+		input, _ := reader.ReadString('\n')
+		serverURL = strings.TrimSpace(input)
+
 		if serverURL == "" {
 			fmt.Println("[错误] Server地址不能为空！")
 			fmt.Println("[提示] 使用 -h 参数查看帮助信息")
@@ -211,9 +207,17 @@ func main() {
 			fmt.Scanln()
 			return
 		}
-	} else {
-		serverURL = serverAddr
 	}
+
+	// 验证Server地址格式
+	if !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {
+		serverURL = "http://" + serverURL
+	}
+
+	if serverAddr == "" && defaultServerURL == "" {
+		fmt.Printf("[Server地址] %s\n", serverURL)
+	}
+	fmt.Println()
 
 	// 验证Server地址格式
 	if !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {

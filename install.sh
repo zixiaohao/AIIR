@@ -1000,6 +1000,18 @@ build_exe() {
     cp "$INSTALL_DIR/windowsclient_gaint/windows_check_gaint.exe" "$INSTALL_DIR/dist/"
     log_success "windows_check_gaint.exe 编译完成"
 
+    # 编译自动修复版
+    log_info "编译自动修复版 windows_check_autofix.exe..."
+    docker run --rm \
+        -v "$INSTALL_DIR/windowsclient_gaint_autofix:/app" \
+        -w /app \
+        -e GOPROXY="$GOPROXY_URL" \
+        "$GOLANG_IMAGE" \
+        sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w -X main.defaultServerURL=$SERVER_URL' -o /app/windows_check_autofix.exe ."
+
+    cp "$INSTALL_DIR/windowsclient_gaint_autofix/windows_check_autofix.exe" "$INSTALL_DIR/dist/"
+    log_success "windows_check_autofix.exe 编译完成"
+
     # ==================== Linux 客户端打包 ====================
     log_info ""
     log_info "=== 打包 Linux 客户端 ==="
@@ -1046,6 +1058,23 @@ build_exe() {
     rm -rf "$INSTALL_DIR/dist/linuxclient_gaint_temp"
     log_success "linuxclient_gaint.tar.gz 打包完成"
 
+    # 打包自动修复版 Linux 客户端
+    log_info "打包 linuxclient_autofix.tar.gz..."
+    mkdir -p "$INSTALL_DIR/dist/linuxclient_autofix_temp"
+    cp -r "$INSTALL_DIR/linuxclient_gaint_autofix/"* "$INSTALL_DIR/dist/linuxclient_autofix_temp/"
+
+    if [ -f "$INSTALL_DIR/dist/linuxclient_autofix_temp/client_autofix.sh" ]; then
+        sed -i "s|DEFAULT_SERVER_URL=\"\${AIIR_SERVER_URL:-}\"|DEFAULT_SERVER_URL=\"$SERVER_URL\"|g" "$INSTALL_DIR/dist/linuxclient_autofix_temp/client_autofix.sh"
+        sed -i "s|http://localhost:8000|$SERVER_URL|g" "$INSTALL_DIR/dist/linuxclient_autofix_temp/client_autofix.sh"
+        sed -i "s|http://YOUR_SERVER_IP:PORT|$SERVER_URL|g" "$INSTALL_DIR/dist/linuxclient_autofix_temp/client_autofix.sh"
+    fi
+
+    cd "$INSTALL_DIR/dist/linuxclient_autofix_temp"
+    tar -czvf "$INSTALL_DIR/dist/linuxclient_autofix.tar.gz" .
+    cd "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR/dist/linuxclient_autofix_temp"
+    log_success "linuxclient_autofix.tar.gz 打包完成"
+
     log_info ""
     log_success "所有客户端编译完成！"
     log_info "Server 地址已预置: $SERVER_URL"
@@ -1056,8 +1085,10 @@ build_exe() {
     echo ""
     echo -e "  ${BLUE}Windows 标准版:${NC}   $INSTALL_DIR/dist/windows_check.exe"
     echo -e "  ${BLUE}Windows 增强版:${NC}   $INSTALL_DIR/dist/windows_check_gaint.exe"
+    echo -e "  ${BLUE}Windows 修复版:${NC}   $INSTALL_DIR/dist/windows_check_autofix.exe"
     echo -e "  ${BLUE}Linux   标准版:${NC}   $INSTALL_DIR/dist/LinuxClient.tar.gz"
     echo -e "  ${BLUE}Linux   增强版:${NC}   $INSTALL_DIR/dist/linuxclient_gaint.tar.gz"
+    echo -e "  ${BLUE}Linux   修复版:${NC}   $INSTALL_DIR/dist/linuxclient_autofix.tar.gz"
     echo ""
     echo -e "  ${YELLOW}下载目录:${NC} $INSTALL_DIR/dist/"
     echo ""
