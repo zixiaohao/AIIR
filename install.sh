@@ -166,10 +166,15 @@ check_network() {
         return 0
     fi
 
+    # 测试ghproxy加速器
+    if curl -s --connect-timeout 5 https://ghproxy.net > /dev/null 2>&1; then
+        log_warn "GitHub 直连失败，但 ghproxy 加速器可用"
+        return 0
+    fi
+
     # 测试Gitee镜像连接
     if curl -s --connect-timeout 5 https://gitee.com > /dev/null 2>&1; then
-        log_warn "GitHub 连接失败，尝试使用 Gitee 镜像..."
-        REPO_URL="https://gitee.com/zixiaohao/aiir.git"
+        log_warn "GitHub 连接失败，但 Gitee 镜像可用"
         return 0
     fi
 
@@ -187,6 +192,82 @@ setup_git_proxy() {
         GIT_PROXY="$proxy"
         log_success "Git 代理已配置: $proxy"
     fi
+}
+
+# 带加速器回退的 git fetch
+# 参数: $1=仓库目录  $2=分支名(默认main)
+git_fetch_with_fallback() {
+    local repo_dir="${1:-.}"
+    local branch="${2:-main}"
+    cd "$repo_dir"
+
+    # 第一次尝试：GitHub 原地址
+    log_info "尝试从 GitHub 拉取..."
+    if git fetch origin "$branch" 2>/dev/null; then
+        log_success "GitHub 拉取成功"
+        return 0
+    fi
+
+    # 第二次尝试：ghproxy 加速器
+    local ghproxy_url="https://ghproxy.net/https://github.com/zixiaohao/AIIR.git"
+    log_warn "GitHub 直连失败，尝试 ghproxy 加速器..."
+    git remote set-url origin "$ghproxy_url" 2>/dev/null
+    if git fetch origin "$branch" 2>/dev/null; then
+        log_success "ghproxy 加速拉取成功"
+        # 恢复原地址，避免下次还走加速器
+        git remote set-url origin "$REPO_URL"
+        return 0
+    fi
+
+    # 第三次尝试：Gitee 镜像
+    local gitee_url="https://gitee.com/zixiaohao/aiir.git"
+    log_warn "ghproxy 失败，尝试 Gitee 镜像..."
+    git remote set-url origin "$gitee_url"
+    if git fetch origin "$branch" 2>/dev/null; then
+        log_success "Gitee 镜像拉取成功"
+        # 恢复原地址
+        git remote set-url origin "$REPO_URL"
+        return 0
+    fi
+
+    # 全部失败，恢复原地址
+    git remote set-url origin "$REPO_URL"
+    log_error "所有拉取方式均失败，请检查网络或手动配置代理"
+    return 1
+}
+
+# 带加速器回退的 git clone
+# 参数: $1=目标目录
+git_clone_with_fallback() {
+    local target_dir="$1"
+
+    # 第一次尝试：GitHub 原地址
+    log_info "尝试从 GitHub 克隆..."
+    if git clone "$REPO_URL" "$target_dir" 2>/dev/null; then
+        log_success "GitHub 克隆成功"
+        return 0
+    fi
+
+    # 第二次尝试：ghproxy 加速器
+    local ghproxy_url="https://ghproxy.net/https://github.com/zixiaohao/AIIR.git"
+    log_warn "GitHub 直连失败，尝试 ghproxy 加速器..."
+    if git clone "$ghproxy_url" "$target_dir" 2>/dev/null; then
+        log_success "ghproxy 加速克隆成功"
+        cd "$target_dir" && git remote set-url origin "$REPO_URL"
+        return 0
+    fi
+
+    # 第三次尝试：Gitee 镜像
+    local gitee_url="https://gitee.com/zixiaohao/aiir.git"
+    log_warn "ghproxy 失败，尝试 Gitee 镜像..."
+    if git clone "$gitee_url" "$target_dir" 2>/dev/null; then
+        log_success "Gitee 镜像克隆成功"
+        cd "$target_dir" && git remote set-url origin "$REPO_URL"
+        return 0
+    fi
+
+    log_error "所有克隆方式均失败，请检查网络或手动配置代理"
+    return 1
 }
 
 # 配置Docker镜像加速
@@ -339,12 +420,12 @@ clone_source() {
     # 检查是否已存在
     if [ -d "$INSTALL_DIR/.git" ]; then
         log_warn "源码已存在，正在更新..."
+        git_fetch_with_fallback "$INSTALL_DIR" "main"
         cd "$INSTALL_DIR"
-        git fetch origin main
         git reset --hard origin/main
     else
         cd "$(dirname "$INSTALL_DIR")"
-        git clone "$REPO_URL" "$(basename "$INSTALL_DIR")"
+        git_clone_with_fallback "$(basename "$INSTALL_DIR")"
         cd "$INSTALL_DIR"
     fi
 
@@ -742,7 +823,8 @@ upgrade_version() {
 
     # 更新源码
     log_info "更新源码..."
-    git fetch origin main
+    cd "$INSTALL_DIR"
+    git_fetch_with_fallback "$INSTALL_DIR" "main"
     git reset --hard origin/main
 
     # 检测 Docker Hub 可达性，不可达时自动配置镜像加速
@@ -767,6 +849,105 @@ upgrade_version() {
 
     log_success "升级完成！"
     log_info "查看日志: $COMPOSE_CMD logs -f"
+}
+
+# -----------------------------------------------------------------------------
+# 服务控制
+# -----------------------------------------------------------------------------
+
+# 获取 compose 命令（内部辅助）
+_get_compose_cmd() {
+    local cmd
+    cmd=$(check_docker_compose)
+    if [ $? -ne 0 ]; then
+        echo ""
+        return 1
+    fi
+    echo "$cmd"
+}
+
+manage_service() {
+    local action="$1"
+
+    if [ ! -d "$INSTALL_DIR/Server" ]; then
+        log_error "服务未安装，请先执行安装"
+        return 1
+    fi
+
+    local COMPOSE_CMD
+    COMPOSE_CMD=$(_get_compose_cmd)
+    if [ -z "$COMPOSE_CMD" ]; then
+        log_error "docker compose 未安装"
+        return 1
+    fi
+
+    cd "$INSTALL_DIR/Server"
+
+    case "$action" in
+        start)
+            log_info "启动 AIIR Server..."
+            sudo $COMPOSE_CMD up -d
+            log_success "服务已启动"
+            sudo $COMPOSE_CMD ps
+            ;;
+        stop)
+            log_info "停止 AIIR Server..."
+            sudo $COMPOSE_CMD down
+            log_success "服务已停止"
+            ;;
+        restart)
+            log_info "重启 AIIR Server..."
+            sudo $COMPOSE_CMD restart
+            log_success "服务已重启"
+            sudo $COMPOSE_CMD ps
+            ;;
+        status)
+            echo ""
+            echo -e "${BLUE}=== AIIR Server 状态 ===${NC}"
+            sudo $COMPOSE_CMD ps
+            echo ""
+            echo -e "${BLUE}=== 健康检查 ===${NC}"
+            curl -s --connect-timeout 3 http://localhost:8000/health 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "服务未响应（可能正在启动中）"
+            ;;
+        logs)
+            log_info "显示 AIIR Server 日志（Ctrl+C 退出）..."
+            sudo $COMPOSE_CMD logs -f --tail=100
+            ;;
+        *)
+            log_error "未知操作: $action"
+            return 1
+            ;;
+    esac
+}
+
+# 服务控制子菜单
+service_menu() {
+    while true; do
+        echo ""
+        echo -e "${BLUE}============ 服务控制 ============${NC}"
+        echo "1. 启动服务"
+        echo "2. 停止服务"
+        echo "3. 重启服务"
+        echo "4. 查看状态"
+        echo "5. 查看日志"
+        echo "0. 返回主菜单"
+        echo ""
+        echo -n "请输入选项 [0-5]: "
+        read sub_choice
+
+        case $sub_choice in
+            1) manage_service start ;;
+            2) manage_service stop ;;
+            3) manage_service restart ;;
+            4) manage_service status ;;
+            5) manage_service logs ;;
+            0) return ;;
+            *) log_error "无效选项" ;;
+        esac
+
+        echo ""
+        read -p "按 Enter 键继续..." dummy
+    done
 }
 
 # -----------------------------------------------------------------------------
@@ -821,11 +1002,12 @@ show_menu() {
     echo "1. 部署服务端 (Docker安装 + 源码部署)"
     echo "2. 编译客户端 (exe编译 + Linux打包)"
     echo "3. 更新版本 (停止服务 + 拉取代码 + 重建)"
-    echo "4. 查看状态"
-    echo "5. 卸载"
+    echo "4. 服务控制 (启动/停止/重启/日志)"
+    echo "5. 查看状态"
+    echo "6. 卸载"
     echo "0. 退出"
     echo ""
-    echo -n "请输入选项 [0-5]: "
+    echo -n "请输入选项 [0-6]: "
 }
 
 # 卸载
@@ -899,9 +1081,12 @@ main() {
                 upgrade_version
                 ;;
             4)
-                show_status
+                service_menu
                 ;;
             5)
+                show_status
+                ;;
+            6)
                 uninstall
                 ;;
             0)
