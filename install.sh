@@ -340,7 +340,8 @@ clone_source() {
     if [ -d "$INSTALL_DIR/.git" ]; then
         log_warn "源码已存在，正在更新..."
         cd "$INSTALL_DIR"
-        git pull origin main
+        git fetch origin main
+        git reset --hard origin/main
     else
         cd "$(dirname "$INSTALL_DIR")"
         git clone "$REPO_URL" "$(basename "$INSTALL_DIR")"
@@ -640,7 +641,7 @@ build_exe() {
         -w /app \
         -e GOPROXY="$GOPROXY_URL" \
         "$GOLANG_IMAGE" \
-        sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w -X main.defaultServerURL=$SERVER_URL' -o /app/windows_check_gaint.exe main_gaint.go"
+        sh -c "GOOS=windows GOARCH=amd64 go build -ldflags '-s -w -X main.defaultServerURL=$SERVER_URL' -o /app/windows_check_gaint.exe ."
 
     # 复制到输出目录
     cp "$INSTALL_DIR/windowsclient_gaint/windows_check_gaint.exe" "$INSTALL_DIR/dist/"
@@ -741,7 +742,8 @@ upgrade_version() {
 
     # 更新源码
     log_info "更新源码..."
-    git pull origin main
+    git fetch origin main
+    git reset --hard origin/main
 
     # 检测 Docker Hub 可达性，不可达时自动配置镜像加速
     configure_docker_hub_mirror "$INSTALL_DIR/Server/Dockerfile"

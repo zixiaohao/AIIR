@@ -13,6 +13,12 @@
       "parentBranch": "main",
       "createdAt": "2026-04-29T08:21:21.348Z",
       "remote": "origin"
+    },
+    "wt-1777513624177-1": {
+      "branch": "political-tulip",
+      "path": "c:\\Users\\LK\\Desktop\\system_check\\.kilo\\worktrees\\political-tulip",
+      "parentBranch": "master",
+      "createdAt": "2026-04-30T01:47:04.177Z"
     }
   },
   "sessions": {
@@ -23,6 +29,10 @@
     "ses_227abbd67ffePqrtmsCViyJcfc": {
       "worktreeId": "wt-1777450881348-2",
       "createdAt": "2026-04-29T08:21:34.058Z"
+    },
+    "ses_223ee86d1ffeeiMG1MQT2RZQba": {
+      "worktreeId": "wt-1777513624177-1",
+      "createdAt": "2026-04-30T01:47:07.880Z"
     }
   },
   "tabOrder": {
@@ -32,6 +42,7 @@
   },
   "worktreeOrder": [
     "wt-1777450854165-1",
-    "wt-1777450881348-2"
+    "wt-1777450881348-2",
+    "wt-1777513624177-1"
   ]
 }
