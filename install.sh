@@ -450,7 +450,39 @@ setup_config() {
         log_warn "配置文件已创建: $CONFIG_DIR/config.json"
         log_warn "请编辑配置文件填入 API 密钥"
     else
-        log_info "配置文件已存在，跳过"
+        # 校验已有配置文件的JSON格式
+        local parse_result
+        parse_result=$(python3 -c "
+import json, sys
+try:
+    with open('$CONFIG_DIR/config.json', 'r', encoding='utf-8') as f:
+        json.load(f)
+    print('OK')
+except json.JSONDecodeError as e:
+    print(f'ERROR|line {e.lineno}, col {e.colno}: {e.msg}')
+except Exception as e:
+    print(f'ERROR|{e}')
+" 2>&1)
+
+        if [ "$parse_result" = "OK" ]; then
+            log_success "配置文件JSON格式正确"
+        else
+            local error_detail="${parse_result#ERROR|}"
+            log_error "配置文件JSON格式错误: $error_detail"
+            log_error "文件路径: $CONFIG_DIR/config.json"
+            echo ""
+            read -p "是否从模板重置配置文件? API密钥需重新配置 (y/N): " reset_confirm
+            if [ "$reset_confirm" == "y" ] || [ "$reset_confirm" == "Y" ]; then
+                # 备份旧文件
+                sudo cp "$CONFIG_DIR/config.json" "$CONFIG_DIR/config.json.bak.$(date +%Y%m%d%H%M%S)"
+                sudo cp "$INSTALL_DIR/Server/config.json.example" "$CONFIG_DIR/config.json"
+                sudo chown $(whoami):$(whoami) "$CONFIG_DIR/config.json"
+                log_warn "配置文件已重置，旧文件已备份为 config.json.bak.*"
+                log_warn "请编辑配置文件填入 API 密钥: $CONFIG_DIR/config.json"
+            else
+                log_warn "请手动修复配置文件后重新部署"
+            fi
+        fi
     fi
 }
 
@@ -826,6 +858,9 @@ upgrade_version() {
     cd "$INSTALL_DIR"
     git_fetch_with_fallback "$INSTALL_DIR" "main"
     git reset --hard origin/main
+
+    # 校验现有配置文件，如有语法错误则提示修复
+    setup_config
 
     # 检测 Docker Hub 可达性，不可达时自动配置镜像加速
     configure_docker_hub_mirror "$INSTALL_DIR/Server/Dockerfile"
