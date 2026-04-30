@@ -62,12 +62,15 @@ jobs:
         working-directory: ./windowsclient_gaint
         run: |
           go build -ldflags "-s -w" -o ../dist/windows_check_gaint.exe .
+          go build -ldflags "-s -w" -o ../dist/action_executor_gaint.exe action_executor_gaint.go types.go
 
       - name: Upload windowsclient_gaint artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows_check_gaint
-          path: dist/windows_check_gaint.exe
+          path: |
+            dist/windows_check_gaint.exe
+            dist/action_executor_gaint.exe
 
   release:
     name: Create Release
@@ -101,6 +104,7 @@ jobs:
             **包含文件：**
             - `windows_check.exe` — 标准版Windows客户端
             - `windows_check_gaint.exe` — 增强版Windows客户端（一次性全量分析）
+            - `action_executor_gaint.exe` — 自动修复命令执行器
 
             **构建信息：**
             - 提交: ${{ github.sha }}
@@ -108,5 +112,6 @@ jobs:
           files: |
             dist/windows_check.exe
             dist/windows_check_gaint.exe
+            dist/action_executor_gaint.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

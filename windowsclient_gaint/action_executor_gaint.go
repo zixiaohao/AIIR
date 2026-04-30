@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -19,14 +21,6 @@ import (
 // 功能：解析AI分析返回的修复动作列表，逐条询问用户确认后执行
 // 特点：每条操作都需要用户确认，高风险操作有醒目提示
 // ============================================================
-
-// Action 修复动作定义
-type Action struct {
-	Command     string `json:"command"`
-	Description string `json:"description"`
-	RiskLevel   string `json:"risk_level"`
-	Category    string `json:"category"`
-}
 
 // ServerResponse Server响应结构
 type ServerResponse struct {
