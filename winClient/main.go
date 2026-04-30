@@ -170,11 +170,11 @@ func main() {
 	showBanner()
 
 	// 获取Server地址
+	reader := bufio.NewReader(os.Stdin)
 	if defaultServerURL != "" {
 		ServerURL = defaultServerURL
 		fmt.Printf("[Server地址] %s (编译时预置)\n", ServerURL)
 	} else {
-		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
 		input, _ := reader.ReadString('\n')
 		ServerURL = strings.TrimSpace(input)
