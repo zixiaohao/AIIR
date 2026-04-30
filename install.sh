@@ -581,6 +581,235 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
+# 交互式配置向导
+# -----------------------------------------------------------------------------
+
+# 用 python3 修改 config.json 的辅助函数（通过环境变量安全传值）
+# 用法: _config_set MODEL_KEY VALUE   或   _config_set_obj FIELD VALUE
+_config_set() {
+    CFG_FILE="$CONFIG_DIR/config.json" CFG_MODEL_KEY="$1" CFG_VALUE="$2" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+k = os.environ['CFG_MODEL_KEY']
+v = os.environ['CFG_VALUE']
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+c.setdefault('ai_models',{}).setdefault('models',{}).setdefault(k,{})['api_key'] = v
+with open(p,'w',encoding='utf-8') as f: json.dump(c,f,indent=2,ensure_ascii=False)
+"
+}
+
+_config_set_obj() {
+    local cfg_field="$1"
+    local cfg_value="$2"
+    CFG_FILE="$CONFIG_DIR/config.json" CFG_FIELD="$cfg_field" CFG_VALUE="$cfg_value" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+f = os.environ['CFG_FIELD']
+v = os.environ['CFG_VALUE']
+with open(p,'r',encoding='utf-8') as fobj: c = json.load(fobj)
+c.setdefault('object_storage',{})[f] = v
+with open(p,'w',encoding='utf-8') as fobj: json.dump(c,fobj,indent=2,ensure_ascii=False)
+"
+}
+
+# 读取模型当前 API Key（脱敏）
+_get_model_key_masked() {
+    CFG_FILE="$CONFIG_DIR/config.json" CFG_MODEL_KEY="$1" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+k = os.environ['CFG_MODEL_KEY']
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+ak = c.get('ai_models',{}).get('models',{}).get(k,{}).get('api_key','')
+if ak and ak != 'YOUR_API_KEY_HERE':
+    print(ak[:4] + '****' + ak[-4:] if len(ak)>8 else '****')
+else:
+    print('')
+" 2>/dev/null
+}
+
+# 读取对象存储当前 endpoint
+_get_storage_endpoint() {
+    CFG_FILE="$CONFIG_DIR/config.json" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+ep = c.get('object_storage',{}).get('endpoint','')
+print(ep if ep and ep != 'YOUR_S3_ENDPOINT' else '')
+" 2>/dev/null
+}
+
+# 显示配置摘要
+_show_config_summary() {
+    CFG_FILE="$CONFIG_DIR/config.json" python3 -c "
+import json, os
+p = os.environ['CFG_FILE']
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+print()
+print('  已启用的模型:')
+for k, m in c.get('ai_models',{}).get('models',{}).items():
+    if m.get('enabled'):
+        ak = m.get('api_key','')
+        if ak and ak != 'YOUR_API_KEY_HERE':
+            s = ak[:4]+'****'+ak[-4:] if len(ak)>8 else '****'
+        else:
+            s = '未配置'
+        print(f'    {k:20s} {m.get(\"name\",\"\"):20s} 密钥: {s}')
+print()
+d = c.get('ai_models',{}).get('default','未设置')
+print(f'  默认模型: {d}')
+o = c.get('object_storage',{})
+ep = o.get('endpoint','')
+if ep and ep != 'YOUR_S3_ENDPOINT':
+    print(f'  对象存储: {o.get(\"bucket\",\"\")} @ {ep}')
+else:
+    print('  对象存储: 未配置（本地存储）')
+print()
+" 2>/dev/null
+}
+
+interactive_config() {
+    local config_file="$CONFIG_DIR/config.json"
+
+    if [ ! -f "$config_file" ]; then
+        log_warn "配置文件不存在，跳过交互配置"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BLUE}============================================================${NC}"
+    echo -e "${BLUE}         配置向导${NC}"
+    echo -e "${BLUE}============================================================${NC}"
+    echo ""
+    echo "接下来将引导您配置 AI 模型密钥和对象存储。"
+    echo "直接按 Enter 跳过该项（保留默认值）。"
+    echo ""
+
+    # ---- 1. AI 模型 API 密钥 ----
+    echo -e "${BLUE}--- AI 模型 API 密钥配置 ---${NC}"
+    echo ""
+    echo "  可用模型:"
+    echo "    1. deepseek-flash  (默认模型，强烈建议配置)"
+    echo "    2. deepseek-pro"
+    echo "    3. mimo            (一次性全量分析模型)"
+    echo "    4. minimax"
+    echo "    5. openai"
+    echo "    6. claude"
+    echo "    7. 智谱 zhipu"
+    echo "    8. 通义千问 qwen"
+    echo "    9. moonshot (Kimi)"
+    echo "   10. 全部配置"
+    echo ""
+
+    read -p "请选择要配置的模型 [1-10，直接Enter跳过]: " model_choice
+
+    if [ -n "$model_choice" ]; then
+        local models_to_config=()
+        case "$model_choice" in
+            1)  models_to_config=("deepseek-flash") ;;
+            2)  models_to_config=("deepseek-pro") ;;
+            3)  models_to_config=("mimo") ;;
+            4)  models_to_config=("minimax") ;;
+            5)  models_to_config=("openai") ;;
+            6)  models_to_config=("claude") ;;
+            7)  models_to_config=("zhipu") ;;
+            8)  models_to_config=("qwen") ;;
+            9)  models_to_config=("moonshot") ;;
+            10) models_to_config=("deepseek-flash" "deepseek-pro" "mimo" "minimax" "openai" "claude" "zhipu" "qwen" "moonshot") ;;
+            *)  log_warn "无效选项，跳过模型配置" ;;
+        esac
+
+        for model_key in "${models_to_config[@]}"; do
+            local masked
+            masked=$(_get_model_key_masked "$model_key")
+
+            if [ -n "$masked" ]; then
+                echo ""
+                echo "  [$model_key] 当前密钥: $masked"
+                read -p "  输入新密钥 (Enter保留当前): " new_key
+            else
+                echo ""
+                read -p "  [$model_key] 请输入 API 密钥 (Enter跳过): " new_key
+            fi
+
+            if [ -n "$new_key" ]; then
+                _config_set "$model_key" "$new_key"
+                log_success "[$model_key] API 密钥已更新"
+            fi
+        done
+    else
+        log_info "跳过模型密钥配置"
+    fi
+
+    # ---- 2. 对象存储配置 ----
+    echo ""
+    echo -e "${BLUE}--- 对象存储配置（可选） ---${NC}"
+    echo "  用于将分析报告上传到 S3 兼容存储。"
+    echo "  不配置则使用本地文件存储。"
+    echo ""
+    read -p "是否配置对象存储? (y/N): " storage_confirm
+
+    if [ "$storage_confirm" = "y" ] || [ "$storage_confirm" = "Y" ]; then
+        local current_endpoint
+        current_endpoint=$(_get_storage_endpoint)
+
+        echo ""
+        if [ -n "$current_endpoint" ]; then
+            echo "  当前 Endpoint: $current_endpoint"
+            read -p "  S3 Endpoint (Enter保留当前): " s3_endpoint
+        else
+            read -p "  S3 Endpoint (如 http://eos.example.com): " s3_endpoint
+        fi
+
+        read -p "  Access Key: " s3_ak
+        read -p "  Secret Key: " s3_sk
+        read -p "  Bucket 名称: " s3_bucket
+        read -p "  文件前缀 [默认 results/]: " s3_prefix
+        s3_prefix="${s3_prefix:-results/}"
+
+        # 至少需要一项非空才写入
+        if [ -n "$s3_endpoint" ] || [ -n "$s3_ak" ] || [ -n "$s3_sk" ] || [ -n "$s3_bucket" ]; then
+            [ -n "$s3_endpoint" ] && _config_set_obj "endpoint" "$s3_endpoint"
+            [ -n "$s3_ak" ]       && _config_set_obj "access_key" "$s3_ak"
+            [ -n "$s3_bucket" ]   && _config_set_obj "bucket" "$s3_bucket"
+            [ -n "$s3_prefix" ]   && _config_set_obj "prefix" "$s3_prefix"
+
+            if [ -n "$s3_sk" ]; then
+                # 尝试 AES 加密存储
+                CFG_FILE="$config_file" CFG_SK="$s3_sk" CFG_INSTALL_DIR="$INSTALL_DIR" python3 -c "
+import json, os, sys
+p = os.environ['CFG_FILE']
+sk = os.environ['CFG_SK']
+sys.path.insert(0, os.environ['CFG_INSTALL_DIR'] + '/Server')
+with open(p,'r',encoding='utf-8') as f: c = json.load(f)
+try:
+    if os.environ.get('AIIR_AES_KEY'):
+        from aescode import AESCoder
+        c['object_storage']['secret_key_encrypted'] = AESCoder().encrypt(sk).decode()
+    else:
+        c['object_storage']['secret_key_encrypted'] = sk
+except Exception:
+    c['object_storage']['secret_key_encrypted'] = sk
+with open(p,'w',encoding='utf-8') as f: json.dump(c,f,indent=2,ensure_ascii=False)
+" 2>/dev/null
+            fi
+            log_success "对象存储配置已写入"
+        else
+            log_info "未填写任何存储信息，跳过"
+        fi
+    else
+        log_info "跳过对象存储配置（使用本地存储）"
+    fi
+
+    # ---- 3. 显示配置摘要 ----
+    echo ""
+    echo -e "${BLUE}--- 配置摘要 ---${NC}"
+    _show_config_summary
+
+    log_success "配置完成！"
+    echo ""
+}
+
+# -----------------------------------------------------------------------------
 # 部署服务
 # -----------------------------------------------------------------------------
 
@@ -1050,10 +1279,11 @@ show_menu() {
     echo "3. 更新版本 (停止服务 + 拉取代码 + 重建)"
     echo "4. 服务控制 (启动/停止/重启/日志)"
     echo "5. 查看状态"
-    echo "6. 卸载"
+    echo "6. 配置向导 (修改API密钥/对象存储)"
+    echo "7. 卸载"
     echo "0. 退出"
     echo ""
-    echo -n "请输入选项 [0-6]: "
+    echo -n "请输入选项 [0-7]: "
 }
 
 # 卸载
@@ -1105,6 +1335,7 @@ main() {
                 install_docker
                 clone_source
                 setup_config
+                interactive_config
                 deploy_service
                 echo ""
                 read -p "是否立即编译 exe? (y/N): " confirm
@@ -1133,6 +1364,9 @@ main() {
                 show_status
                 ;;
             6)
+                interactive_config
+                ;;
+            7)
                 uninstall
                 ;;
             0)
