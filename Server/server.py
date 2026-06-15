@@ -653,25 +653,26 @@ def ensure_local_storage_dir():
         print(f"[*] 创建本地存储目录: {LOCAL_STORAGE_DIR}")
 
 def upload_to_s3(content, filename):
-    """上传内容到对象存储（S3优先，本地备选）"""
-    # 优先使用S3客户端
+    """
+    上传内容到对象存储（S3作为备份，本地作为主存储）
+    返回值始终包含本地下载令牌，不对外暴露S3
+    """
+    # 尝试上传到S3作为备份（静默处理，不影响正常流程）
     if s3_client:
         try:
             bucket = config['object_storage']['bucket']
             prefix = config['object_storage']['prefix']
             key = f"{prefix}{filename}"
-            
             s3_client.put_object(
                 Bucket=bucket,
                 Key=key,
                 Body=content.encode('utf-8')
             )
-            print(f"[*] 文件已上传到S3: {key}")
-            return True, f"上传成功: {key}", "s3", key
+            print(f"[*] 文件已备份到S3: {key}")
         except Exception as e:
-            print(f"[WARNING] S3上传失败，尝试本地存储: {str(e)}")
+            print(f"[WARNING] S3备份失败（不影响服务）: {str(e)}")
     
-    # S3不可用时，使用本地存储作为备选方案
+    # 始终使用本地存储提供下载服务
     try:
         ensure_local_storage_dir()
         
@@ -692,55 +693,37 @@ def upload_to_s3(content, filename):
         print(f"[*] 文件已保存到本地: {local_file_path}")
         print(f"[*] 下载令牌: {token} (过期时间: {expires_at.strftime('%Y-%m-%d %H:%M:%S')})")
         
-        return True, f"上传成功（本地存储）: {filename}", "local", token
+        return True, f"上传成功: {filename}", "local", token
     except Exception as e:
-        print(f"[ERROR] 本地存储也失败: {str(e)}")
+        print(f"[ERROR] 本地存储失败: {str(e)}")
         return False, f"上传失败: {str(e)}", None, None
 
 
 def generate_download_url(content, filename, request_host):
     """
     生成文件下载链接
-    - S3: 生成预签名URL（12小时有效）
-    - 本地: 生成带令牌的下载URL
-    返回: (download_url, storage_type)
+    始终通过服务器自身IP提供短链接下载，不暴露外部存储
+    返回: download_url 或 None
     """
     success, msg, storage_type, storage_ref = upload_to_s3(content, filename)
     
     if not success:
         return None
     
-    if storage_type == "s3" and s3_client:
-        try:
-            bucket = config['object_storage']['bucket']
-            presigned_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': bucket, 'Key': storage_ref},
-                ExpiresIn=43200  # 12小时 = 43200秒
-            )
-            return presigned_url
-        except Exception as e:
-            print(f"[WARNING] 生成S3预签名URL失败: {str(e)}")
-            # 降级：返回普通的S3 URL（可能无法直接访问）
-            return None
-    elif storage_type == "local":
-        # 构建本地下载URL
-        # 确定对外访问的host
-        server_host = config.get('server', {}).get('host', '127.0.0.1')
-        server_port = config.get('server', {}).get('port', 8000)
-        
-        # 如果监听0.0.0.0，使用请求来源的host
-        if server_host == '0.0.0.0':
-            download_host = request_host.split(':')[0] if ':' in request_host else request_host
-        else:
-            download_host = server_host
-        
-        # 清理过期的下载令牌
-        cleanup_expired_tokens()
-        
-        return f"http://{download_host}:{server_port}/d/{storage_ref}"
+    # 构建服务器自身下载URL（不暴露S3等外部存储）
+    server_host = config.get('server', {}).get('host', '127.0.0.1')
+    server_port = config.get('server', {}).get('port', 8000)
     
-    return None
+    # 如果监听0.0.0.0，使用请求来源的host
+    if server_host == '0.0.0.0':
+        download_host = request_host.split(':')[0] if ':' in request_host else request_host
+    else:
+        download_host = server_host
+    
+    # 清理过期的下载令牌
+    cleanup_expired_tokens()
+    
+    return f"http://{download_host}:{server_port}/d/{storage_ref}"
 
 
 # ================= API路由 =================
