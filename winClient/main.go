@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,17 +21,19 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// 配置 - Server地址（可通过编译时ldflags设置默认值）
-var (
-	ServerURL        string
-	defaultServerURL string
-)
-
 // 全局变量
 var (
+	serverURL        string
+	defaultServerURL string
 	logFile          string
 	keywordsRegex    *regexp.Regexp
 	attackPatterns   map[string][]AttackPattern
+
+	// 执行器统计
+	execExecutedCount = 0
+	execSkippedCount  = 0
+	execFailedCount   = 0
+	execLogFilePath   = ""
 )
 
 // AttackPattern 攻击模式定义
@@ -47,6 +50,14 @@ type AttackPatternsResponse struct {
 	Success  bool                      `json:"success"`
 	Patterns map[string][]AttackPattern `json:"patterns"`
 	Error    string                    `json:"error"`
+}
+
+// Action 修复动作定义
+type Action struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+	RiskLevel   string `json:"risk_level"`
+	Category    string `json:"category"`
 }
 
 func init() {
@@ -88,10 +99,10 @@ func requestElevation() {
 func showBanner() {
 	fmt.Println("╔══════════════════════════════════════════════════════════════╗")
 	fmt.Println("║           Windows 安全应急响应检测工具                      ║")
-	fmt.Println("║                    CS客户端版 v3.1                          ║")
+	fmt.Println("║                    CS客户端版 v4.0                          ║")
 	fmt.Println("╠══════════════════════════════════════════════════════════════╣")
-	fmt.Println("║  功能: 收集系统安全信息，发送到Server进行AI分析             ║")
-	fmt.Println("║  特点: 分批分析、动态特征库、报告保存                       ║")
+	fmt.Println("║  功能: 收集系统安全信息，一次性发送到Server进行AI分析      ║")
+	fmt.Println("║  特点: 全量分析、自动修复命令、12h下载短链接                ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════════╝")
 	fmt.Println()
 }
@@ -123,7 +134,7 @@ func fetchAttackPatterns() bool {
 	fmt.Print("[特征库] 正在从Server获取攻击特征库...")
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(ServerURL + "/attack_patterns")
+	resp, err := client.Get(serverURL + "/attack_patterns")
 	if err != nil {
 		fmt.Println(" ❌ 失败")
 		fmt.Printf("[警告] 无法获取特征库: %v\n", err)
@@ -158,8 +169,305 @@ func fetchAttackPatterns() bool {
 	}
 }
 
+// ============================================================
+// 自动修复命令执行器（集成到主程序）
+// ============================================================
+
+// logActionExec 记录操作日志
+func logActionExec(status, desc, command, output string) {
+	if execLogFilePath == "" {
+		return
+	}
+	f, err := os.OpenFile(execLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logEntry := fmt.Sprintf("--- [%s] ---\n状态: %s\n描述: %s\n命令: %s\n输出: %s\n\n",
+		timestamp, status, desc, command, output)
+	f.WriteString(logEntry)
+}
+
+// showActionDetailExec 显示操作详情
+func showActionDetailExec(index, total int, description, command, riskLevel, category string) {
+	fmt.Println()
+	fmt.Println("════════════════════════════════════════════")
+	fmt.Printf("  操作 [%d/%d]\n", index, total)
+	fmt.Println("════════════════════════════════════════════")
+
+	switch riskLevel {
+	case "high":
+		fmt.Printf("  风险等级: 🔴 高危\n")
+	case "medium":
+		fmt.Printf("  风险等级: 🟡 中危\n")
+	case "low":
+		fmt.Printf("  风险等级: 🟢 低危\n")
+	default:
+		fmt.Printf("  风险等级: ⚪ 未知\n")
+	}
+
+	fmt.Printf("  类别: %s\n", category)
+	fmt.Println()
+	fmt.Println("  描述:")
+	fmt.Printf("  %s\n", description)
+	fmt.Println()
+	fmt.Println("  命令:")
+	fmt.Printf("  %s\n", command)
+
+	if riskLevel == "high" {
+		fmt.Println()
+		fmt.Println("  ⚠️  高风险操作警告！")
+		fmt.Println("  此操作可能会对系统产生重大影响，请谨慎确认。")
+	}
+	fmt.Println("════════════════════════════════════════════")
+}
+
+// executeCommandExec 执行单条修复命令
+func executeCommandExec(command, description, riskLevel, category string, index, total int) {
+	showActionDetailExec(index, total, description, command, riskLevel, category)
+
+	reader := bufio.NewReader(os.Stdin)
+
+	if riskLevel == "high" {
+		fmt.Println()
+		fmt.Print("⚠️  高风险操作，请再次输入 YES 确认执行: ")
+		doubleConfirm, _ := reader.ReadString('\n')
+		doubleConfirm = strings.TrimSpace(doubleConfirm)
+		if doubleConfirm != "YES" {
+			fmt.Println("↻ 已跳过")
+			execSkippedCount++
+			logActionExec("SKIPPED", description, command, "高风险未确认")
+			return
+		}
+	}
+
+	fmt.Println()
+	fmt.Print("是否执行此操作? (y=执行 / n=跳过 / v=查看详情) [默认: n]: ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(confirm)
+
+	switch strings.ToLower(confirm) {
+	case "y", "yes":
+		fmt.Println()
+		fmt.Println("正在执行...")
+		cmd := exec.Command("cmd", "/c", command)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
+		output, err := cmd.CombinedOutput()
+		outputStr := string(output)
+
+		if err == nil {
+			fmt.Println("✅ 执行成功")
+			if strings.TrimSpace(outputStr) != "" {
+				fmt.Println("输出:")
+				lines := strings.Split(outputStr, "\n")
+				for i, line := range lines {
+					if i >= 20 {
+						fmt.Printf("... (输出已截断，共 %d 行)\n", len(lines))
+						break
+					}
+					fmt.Println(line)
+				}
+			}
+			execExecutedCount++
+			logActionExec("SUCCESS", description, command, outputStr)
+		} else {
+			fmt.Printf("❌ 执行失败: %v\n", err)
+			if strings.TrimSpace(outputStr) != "" {
+				fmt.Println("错误信息:")
+				lines := strings.Split(outputStr, "\n")
+				for i, line := range lines {
+					if i >= 10 {
+						break
+					}
+					fmt.Println(line)
+				}
+			}
+			execFailedCount++
+			logActionExec("FAILED", description, command, fmt.Sprintf("Error: %v\n%s", err, outputStr))
+		}
+
+	case "v", "view":
+		fmt.Println()
+		fmt.Println("预执行详情查看:")
+		fmt.Println("此操作会执行以下命令:")
+		fmt.Printf("  %s\n", command)
+		fmt.Println()
+		fmt.Print("是否执行此操作? (y/n) [默认: n]: ")
+		retryConfirm, _ := reader.ReadString('\n')
+		retryConfirm = strings.TrimSpace(retryConfirm)
+		if strings.ToLower(retryConfirm) == "y" || strings.ToLower(retryConfirm) == "yes" {
+			executeCommandExec(command, description, riskLevel, category, index, total)
+			return
+		}
+		fmt.Println("↻ 已跳过")
+		execSkippedCount++
+		logActionExec("SKIPPED", description, command, "用户跳过")
+
+	default:
+		fmt.Println("↻ 已跳过")
+		execSkippedCount++
+		logActionExec("SKIPPED", description, command, "用户跳过")
+	}
+}
+
+// parseActionsFromReport 从报告的JSON代码块中解析动作
+func parseActionsFromReport(report string) []Action {
+	var actions []Action
+	lines := strings.Split(report, "\n")
+	inJSONBlock := false
+	var jsonLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```json") {
+			inJSONBlock = true
+			jsonLines = nil
+			continue
+		}
+		if inJSONBlock && strings.HasPrefix(trimmed, "```") {
+			inJSONBlock = false
+			jsonStr := strings.Join(jsonLines, "\n")
+			var parsed []Action
+			if err := json.Unmarshal([]byte(jsonStr), &parsed); err == nil {
+				actions = append(actions, parsed...)
+			}
+			continue
+		}
+		if inJSONBlock {
+			jsonLines = append(jsonLines, line)
+		}
+	}
+	return actions
+}
+
+// executeActionsInline 直接在主程序中执行修复动作（不启动外部进程）
+func executeActionsInline(responseData []byte, actions []Action, ticketID string) {
+	if len(actions) == 0 {
+		// 尝试从报告中解析
+		var resp struct {
+			AnalysisReport string `json:"analysis_report"`
+		}
+		json.Unmarshal(responseData, &resp)
+		if resp.AnalysisReport != "" {
+			actions = parseActionsFromReport(resp.AnalysisReport)
+		}
+	}
+
+	if len(actions) == 0 {
+		fmt.Println("⚠️  没有发现可执行的修复操作。")
+		return
+	}
+
+	fmt.Println()
+	fmt.Println("==============================================")
+	fmt.Println("     🛠️  自动修复命令执行器")
+	fmt.Println("     逐条确认 · 安全可控")
+	fmt.Println("==============================================")
+	fmt.Println()
+
+	fmt.Printf("发现 %d 条建议修复操作\n", len(actions))
+	fmt.Println("请逐条确认是否执行:")
+	fmt.Println()
+
+	// 重置统计
+	execExecutedCount = 0
+	execSkippedCount = 0
+	execFailedCount = 0
+	execLogFilePath = fmt.Sprintf("%s_action_log.md", ticketID)
+
+	for i, action := range actions {
+		executeCommandExec(action.Command, action.Description, action.RiskLevel, action.Category, i+1, len(actions))
+		fmt.Println()
+	}
+
+	// 显示总结
+	fmt.Println()
+	fmt.Println("==============================================")
+	fmt.Println("     执行总结")
+	fmt.Println("==============================================")
+	fmt.Printf("  ✅ 已执行: %d\n", execExecutedCount)
+	fmt.Printf("  ↻ 已跳过: %d\n", execSkippedCount)
+	fmt.Printf("  ❌ 执行失败: %d\n", execFailedCount)
+	total := execExecutedCount + execSkippedCount + execFailedCount
+	if total > 0 {
+		fmt.Printf("  执行率: %d%%\n", execExecutedCount*100/total)
+	}
+	fmt.Println("==============================================")
+	fmt.Println()
+
+	if execLogFilePath != "" {
+		fmt.Printf("[日志文件] %s\n", execLogFilePath)
+	}
+}
+
 func main() {
-	// 先检查管理员权限（避免收集信息后才发现没有权限）
+	// 解析命令行参数
+	var serverAddr string
+	var showHelp bool
+	flag.StringVar(&serverAddr, "s", "", "Server地址 (格式: http://IP:端口)")
+	flag.StringVar(&serverAddr, "server", "", "Server地址 (格式: http://IP:端口)")
+	flag.BoolVar(&showHelp, "h", false, "显示帮助信息")
+	flag.BoolVar(&showHelp, "help", false, "显示帮助信息")
+	flag.Parse()
+
+	// 显示帮助信息
+	if showHelp {
+		fmt.Println("Windows 安全应急响应检测工具 v3.1 (gaint版本)")
+		fmt.Println()
+		fmt.Println("用法:")
+		fmt.Println("  windows_check_gaint.exe -s <Server地址>")
+		fmt.Println("  windows_check_gaint.exe --server <Server地址>")
+		fmt.Println()
+		fmt.Println("参数:")
+		fmt.Println("  -s, --server    指定Server地址 (格式: http://IP:端口)")
+		fmt.Println("  -h, --help      显示此帮助信息")
+		fmt.Println()
+		fmt.Println("示例:")
+		fmt.Println("  windows_check_gaint.exe -s http://192.168.1.100:8000")
+		fmt.Println("  windows_check_gaint.exe --server http://10.0.0.50:8000")
+		fmt.Println()
+		fmt.Println("注意:")
+		fmt.Println("  - 程序需要管理员权限运行")
+		fmt.Println("  - 如果不指定Server地址，程序将询问用户输入")
+		fmt.Println("  - gaint版本采用一次性发送模式，适合大上下文窗口模型")
+		return
+	}
+
+	// 设置Server地址
+	if serverAddr != "" {
+		serverURL = serverAddr
+	} else if defaultServerURL != "" {
+		serverURL = defaultServerURL
+		fmt.Printf("[Server地址] %s (编译时预置)\n", serverURL)
+	} else {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
+		input, _ := reader.ReadString('\n')
+		serverURL = strings.TrimSpace(input)
+
+		if serverURL == "" {
+			fmt.Println("[错误] Server地址不能为空！")
+			fmt.Println("[提示] 使用 -h 参数查看帮助信息")
+			fmt.Println("按回车键退出...")
+			fmt.Scanln()
+			return
+		}
+	}
+
+	// 验证Server地址格式
+	if !strings.HasPrefix(serverURL, "http://") && !strings.HasPrefix(serverURL, "https://") {
+		serverURL = "http://" + serverURL
+	}
+	
+	if serverAddr != "" || defaultServerURL != "" {
+		// 已自动设置，不重复打印
+	} else {
+		fmt.Printf("[Server地址] %s\n", serverURL)
+	}
+	fmt.Println()
+
+	// 检查管理员权限
 	if !checkAdmin() {
 		fmt.Println("[提示] 程序需要管理员权限才能完整收集系统信息")
 		fmt.Println("[提示] 正在请求管理员权限...")
@@ -168,30 +476,6 @@ func main() {
 	}
 
 	showBanner()
-
-	// 获取Server地址
-	reader := bufio.NewReader(os.Stdin)
-	if defaultServerURL != "" {
-		ServerURL = defaultServerURL
-		fmt.Printf("[Server地址] %s (编译时预置)\n", ServerURL)
-	} else {
-		fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
-		input, _ := reader.ReadString('\n')
-		ServerURL = strings.TrimSpace(input)
-
-		if ServerURL == "" {
-			fmt.Println("[错误] Server地址不能为空！")
-			fmt.Println("按回车键退出...")
-			fmt.Scanln()
-			return
-		}
-
-		if !strings.HasPrefix(ServerURL, "http://") && !strings.HasPrefix(ServerURL, "https://") {
-			ServerURL = "http://" + ServerURL
-		}
-		fmt.Printf("[Server地址] %s\n", ServerURL)
-	}
-	fmt.Println()
 
 	fmt.Println("[权限状态] ✅ 管理员权限")
 	fmt.Println()
@@ -204,22 +488,22 @@ func main() {
 	serverConnected := false
 	fmt.Print("[连接测试] ")
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(ServerURL + "/health")
+	resp, err := client.Get(serverURL + "/health")
 	if err != nil {
 		fmt.Println("❌ 失败")
-		fmt.Printf("[错误] 无法连接到Server: %s\n", ServerURL)
+		fmt.Printf("[错误] 无法连接到Server: %s\n", serverURL)
 		fmt.Println("[提示] 网络连接失败或Server未启动")
 		serverConnected = false
 	} else {
 		resp.Body.Close()
 		fmt.Println("✅ 成功")
-		fmt.Printf("[Server地址] %s\n", ServerURL)
 		serverConnected = true
 	}
 	fmt.Println()
 
 	// 获取工单ID
 	fmt.Print("请输入工单ID: ")
+	reader := bufio.NewReader(os.Stdin)
 	ticketID, _ := reader.ReadString('\n')
 	ticketID = strings.TrimSpace(ticketID)
 
@@ -337,7 +621,7 @@ func main() {
 		return
 	}
 
-	// Server连接正常，启动AI分析
+	// Server连接正常，启动AI分析（使用Server默认模型）
 	fmt.Println("[AI分析] 正在发送数据到Server进行分析...")
 	sendDataToServer(ticketID, hostname)
 
@@ -360,7 +644,7 @@ func main() {
 // 检查Server连接
 func checkServerConnection() bool {
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(ServerURL + "/health")
+	resp, err := client.Get(serverURL + "/health")
 	if err != nil {
 		return false
 	}
@@ -416,11 +700,11 @@ func execCommand(name string, args ...string) string {
 	return string(utf8Output)
 }
 
-// 发送数据到Server - 分批分析模式
+// 发送数据到Server - 一次性发送模式
 func sendDataToServer(ticketID, hostname string) {
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println("              发送数据到Server - 分批分析模式                 ")
+	fmt.Println("              发送数据到Server - 一次性发送模式               ")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 
 	// 读取日志内容
@@ -433,271 +717,129 @@ func sendDataToServer(ticketID, hostname string) {
 	// 获取IP信息
 	ipInfo := getIPInfo()
 
-	// 按模块分割日志
-	lines := strings.Split(string(content), "\n")
-	var sections []struct {
-		title   string
-		content string
-	}
-	var currentSection string
-	var currentContent []string
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "## ") {
-			if currentSection != "" && len(currentContent) > 0 {
-				sections = append(sections, struct {
-					title   string
-					content string
-				}{
-					title:   currentSection,
-					content: strings.Join(currentContent, "\n"),
-				})
-			}
-			currentSection = strings.TrimPrefix(line, "## ")
-			currentContent = []string{}
-		} else {
-			currentContent = append(currentContent, line)
-		}
+	// 构建完整请求（使用Server默认模型）
+	requestBody := map[string]interface{}{
+		"ticket_id":   ticketID,
+		"hostname":    hostname,
+		"ip_info":     ipInfo,
+		"platform":    "windows",
+		"log_content": string(content),
 	}
 
-	// 处理最后一个模块
-	if currentSection != "" && len(currentContent) > 0 {
-		sections = append(sections, struct {
-			title   string
-			content string
-		}{
-			title:   currentSection,
-			content: strings.Join(currentContent, "\n"),
-		})
-	}
-
-	fmt.Printf("[模块数量] 共发现 %d 个模块，开始逐个分析...\n\n", len(sections))
-
-	// 存储各模块分析结果
-	var sectionResults []string
-	successCount := 0
-	failCount := 0
-
-	// 逐个发送模块进行分析
-	for i, section := range sections {
-		fmt.Printf("[%d/%d] 正在分析: %s", i+1, len(sections), section.title)
-
-		// 构建单模块请求
-		requestBody := map[string]interface{}{
-			"section_title":   section.title,
-			"section_content": section.content,
-			"platform":        "windows",
-		}
-
-		jsonBody, err := json.Marshal(requestBody)
-		if err != nil {
-			fmt.Printf(" [❌ JSON编码失败]\n")
-			failCount++
-			continue
-		}
-
-		// 发送请求
-		resp, err := http.Post(ServerURL+"/analyze_section", "application/json", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			fmt.Printf(" [❌ 发送失败]\n")
-			failCount++
-			continue
-		}
-
-		// 读取响应
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			fmt.Printf(" [❌ 读取响应失败]\n")
-			failCount++
-			continue
-		}
-
-		// 解析响应
-		var response struct {
-			Success        bool   `json:"success"`
-			Error          string `json:"error"`
-			AnalysisResult string `json:"analysis_result"`
-		}
-
-		err = json.Unmarshal(body, &response)
-		if err != nil {
-			fmt.Printf(" [❌ 解析响应失败]\n")
-			failCount++
-			continue
-		}
-
-		if response.Success {
-			// 保留所有分析结果，即使是"无异常"也保留详细分析
-			if response.AnalysisResult != "" {
-				if strings.Contains(response.AnalysisResult, "无异常") || 
-				   strings.Contains(response.AnalysisResult, "正常") ||
-				   strings.Contains(response.AnalysisResult, "未发现") {
-					fmt.Println(" [✅ 无异常]")
-				} else {
-					fmt.Println(" [⚠️ 发现异常]")
-				}
-				// 始终添加分析结果到列表
-				sectionResults = append(sectionResults, response.AnalysisResult)
-			} else {
-				fmt.Println(" [✅ 无异常]")
-			}
-			successCount++
-		} else {
-			fmt.Printf(" [❌ 失败: %s]\n", response.Error)
-			failCount++
-		}
-	}
-
-	fmt.Println()
-	fmt.Printf("[分析统计] 成功: %d, 失败: %d\n", successCount, failCount)
-
-	// 发送汇总分析请求
-	fmt.Println()
-	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println("              发送汇总请求进行最终研判                        ")
-	fmt.Println("═══════════════════════════════════════════════════════════════")
-
-	summaryRequest := map[string]interface{}{
-		"ticket_id":       ticketID,
-		"hostname":        hostname,
-		"ip_info":         ipInfo,
-		"platform":        "windows",
-		"section_results": sectionResults,
-	}
-
-	summaryJsonBody, err := json.Marshal(summaryRequest)
+	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		fmt.Printf("[错误] JSON编码失败: %v\n", err)
 		return
 	}
 
-	// 发送汇总请求
-	fmt.Printf("[发送请求] %s\n", ServerURL)
-	summaryResp, err := http.Post(ServerURL+"/analyze_summary", "application/json", bytes.NewBuffer(summaryJsonBody))
+	// 发送请求 - 使用 /analyze 接口（一次性全量分析含自动修复命令）
+	fmt.Printf("[发送请求] %s\n", serverURL)
+	fmt.Println("[AI模式] 一次性全量分析（含自动修复命令）")
+	resp, err := http.Post(serverURL+"/analyze", "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		fmt.Printf("[错误] 发送失败: %v\n", err)
 		return
 	}
-	defer summaryResp.Body.Close()
+	defer resp.Body.Close()
 
 	// 读取响应
-	summaryBody, err := io.ReadAll(summaryResp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("[错误] 读取响应失败: %v\n", err)
 		return
 	}
 
-	// 解析响应
-	var summaryResponse struct {
-		Success        bool   `json:"success"`
-		Error          string `json:"error"`
-		AnalysisReport string `json:"analysis_report"`
+	// 解析响应 - 包含 actions 数组和下载链接
+	var response struct {
+		Success              bool     `json:"success"`
+		Error                string   `json:"error"`
+		AnalysisReport       string   `json:"analysis_report"`
+		ModelUsed            string   `json:"model_used"`
+		Actions              []Action `json:"actions"`
+		LogDownloadURL       string   `json:"log_download_url"`
+		AnalysisDownloadURL  string   `json:"analysis_download_url"`
 	}
 
-	err = json.Unmarshal(summaryBody, &summaryResponse)
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		fmt.Printf("[错误] 解析响应失败: %v\n", err)
 		return
 	}
 
-	if summaryResponse.Success {
+	if response.Success {
 		fmt.Println()
-		fmt.Println("✅ 汇总分析完成!")
+		fmt.Println("✅ 分析完成!")
 		fmt.Printf("[分析系统] 安全应急响应分析平台\n")
+		if response.ModelUsed != "" {
+			fmt.Printf("[使用的模型] %s\n", response.ModelUsed)
+		}
 
 		// 保存分析报告到本地
 		reportFile := fmt.Sprintf("%s_analysis_report.md", ticketID)
-		reportSaved := false
-		err = os.WriteFile(reportFile, []byte(summaryResponse.AnalysisReport), 0644)
+		err = os.WriteFile(reportFile, []byte(response.AnalysisReport), 0644)
 		if err != nil {
 			fmt.Printf("[警告] 保存报告失败: %v\n", err)
 		} else {
-			reportSaved = true
 			fmt.Println()
 			fmt.Println("═══════════════════════════════════════════════════════════════")
 			fmt.Println("                AI 安全应急响应分析报告                        ")
 			fmt.Println("═══════════════════════════════════════════════════════════════")
-			fmt.Println(summaryResponse.AnalysisReport)
+			fmt.Println(response.AnalysisReport)
 			fmt.Println("═══════════════════════════════════════════════════════════════")
 			fmt.Printf("[报告已保存] %s\n", reportFile)
 		}
 
 		// =========================================================
-		//                   上传生成的md文件到Server
+		//  显示Server自动生成的下载短链接（12小时有效）
 		// =========================================================
 		fmt.Println()
 		fmt.Println("═══════════════════════════════════════════════════════════════")
-		fmt.Println("              上传生成的md文件到Server                        ")
+		fmt.Println("    📥 文件下载短链接（12小时有效）                             ")
+		fmt.Println("═══════════════════════════════════════════════════════════════")
+		if response.LogDownloadURL != "" {
+			fmt.Printf("  📄 原始日志: %s\n", response.LogDownloadURL)
+		}
+		if response.AnalysisDownloadURL != "" {
+			fmt.Printf("  📊 分析报告: %s\n", response.AnalysisDownloadURL)
+		}
+		if response.LogDownloadURL == "" && response.AnalysisDownloadURL == "" {
+			fmt.Println("  (文件已由Server自动保存，下载链接生成中...)")
+		}
 		fmt.Println("═══════════════════════════════════════════════════════════════")
 
-		// 上传日志文件
-		fmt.Printf("[上传] 正在上传日志文件: %s\n", logFile)
-		logContent, err := os.ReadFile(logFile)
-		if err != nil {
-			fmt.Printf("  ❌ 读取日志文件失败: %v\n", err)
-		} else {
-			uploadLogRequest := map[string]interface{}{
-				"filename": logFile,
-				"content":  string(logContent),
-			}
-			uploadLogJsonBody, _ := json.Marshal(uploadLogRequest)
-			uploadLogResp, err := http.Post(ServerURL+"/upload", "application/json", bytes.NewBuffer(uploadLogJsonBody))
-			if err != nil {
-				fmt.Printf("  ❌ 日志文件上传失败: %v\n", err)
-			} else {
-				uploadLogBody, _ := io.ReadAll(uploadLogResp.Body)
-				uploadLogResp.Body.Close()
-				var uploadLogResponse struct {
-					Success bool   `json:"success"`
-					Message string `json:"message"`
-				}
-				json.Unmarshal(uploadLogBody, &uploadLogResponse)
-				if uploadLogResponse.Success {
-					fmt.Println("  ✅ 日志文件上传成功")
-				} else {
-					fmt.Printf("  ❌ 日志文件上传失败: %s\n", uploadLogResponse.Message)
-				}
-			}
-		}
+		// =========================================================
+		//                   自动修操作执行（集成）
+		// =========================================================
+		if len(response.Actions) > 0 {
+			fmt.Println()
+			fmt.Println("═══════════════════════════════════════════════════════════════")
+			fmt.Println("              🛠️  自动修复操作建议                            ")
+			fmt.Println("═══════════════════════════════════════════════════════════════")
+			fmt.Printf("[信息] AI分析了 %d 条可执行的修复操作\n", len(response.Actions))
+			fmt.Println()
+			
+			fmt.Print("是否执行自动修复操作？每条操作都会单独确认 (y/n): ")
+			actionReader := bufio.NewReader(os.Stdin)
+			executeActions, _ := actionReader.ReadString('\n')
+			executeActions = strings.TrimSpace(executeActions)
 
-		// 上传分析报告文件（仅在成功保存时才上传）
-		if reportSaved {
-			fmt.Printf("[上传] 正在上传分析报告: %s\n", reportFile)
-			reportContent, err := os.ReadFile(reportFile)
-			if err != nil {
-				fmt.Printf("  ❌ 读取分析报告失败: %v\n", err)
+			if strings.ToLower(executeActions) == "y" || strings.ToLower(executeActions) == "yes" {
+				// 直接在主程序中执行，不再启动外部进程
+				executeActionsInline(body, response.Actions, ticketID)
 			} else {
-				uploadReportRequest := map[string]interface{}{
-					"filename": reportFile,
-					"content":  string(reportContent),
-				}
-				uploadReportJsonBody, _ := json.Marshal(uploadReportRequest)
-				uploadReportResp, err := http.Post(ServerURL+"/upload", "application/json", bytes.NewBuffer(uploadReportJsonBody))
-				if err != nil {
-					fmt.Printf("  ❌ 分析报告上传失败: %v\n", err)
-				} else {
-					uploadReportBody, _ := io.ReadAll(uploadReportResp.Body)
-					uploadReportResp.Body.Close()
-					var uploadReportResponse struct {
-						Success bool   `json:"success"`
-						Message string `json:"message"`
-					}
-					json.Unmarshal(uploadReportBody, &uploadReportResponse)
-					if uploadReportResponse.Success {
-						fmt.Println("  ✅ 分析报告上传成功")
-					} else {
-						fmt.Printf("  ❌ 分析报告上传失败: %s\n", uploadReportResponse.Message)
-					}
-				}
+				fmt.Println("[信息] 用户取消执行自动修复操作")
 			}
 		} else {
-			fmt.Printf("[警告] 分析报告文件不存在: %s\n", reportFile)
+			fmt.Println()
+			fmt.Println("═══════════════════════════════════════════════════════════════")
+			fmt.Println("              ℹ️  未发现需要修复的操作                         ")
+			fmt.Println("═══════════════════════════════════════════════════════════════")
+			fmt.Println("[信息] AI分析未发现需要自动修复的问题")
 		}
 
 		fmt.Println()
 	} else {
-		fmt.Printf("[错误] Server返回错误: %s\n", summaryResponse.Error)
+		fmt.Printf("[错误] Server返回错误: %s\n", response.Error)
 	}
 }
 
@@ -1205,13 +1347,10 @@ func checkOASecurityDeepScan() {
 // 调用AI API（用于OA深度分析）
 func callDeepSeekAPI(systemPrompt, userContent string) string {
 	requestBody := map[string]interface{}{
-		"model": "deepseek-chat",
-		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt},
-			{"role": "user", "content": userContent},
-		},
-		"stream":      false,
-		"temperature": 0.1,
+		"ticket_id":   "oa_deep_scan",
+		"hostname":    hostname,
+		"ip_info":     "oa_deep_scan",
+		"log_content": fmt.Sprintf("# 分析任务\n%s\n\n# 日志内容\n%s", systemPrompt, userContent),
 	}
 
 	jsonBody, err := json.Marshal(requestBody)
@@ -1219,7 +1358,7 @@ func callDeepSeekAPI(systemPrompt, userContent string) string {
 		return "API错误: " + err.Error()
 	}
 
-	req, err := http.NewRequest("POST", ServerURL+"/analyze_section", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", serverURL+"/analyze", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "API错误: " + err.Error()
 	}
@@ -1240,7 +1379,7 @@ func callDeepSeekAPI(systemPrompt, userContent string) string {
 
 	var response struct {
 		Success        bool   `json:"success"`
-		AnalysisResult string `json:"analysis_result"`
+		AnalysisReport string `json:"analysis_report"`
 		Error          string `json:"error"`
 	}
 
@@ -1250,7 +1389,7 @@ func callDeepSeekAPI(systemPrompt, userContent string) string {
 	}
 
 	if response.Success {
-		return response.AnalysisResult
+		return response.AnalysisReport
 	}
 
 	return "API错误: " + response.Error

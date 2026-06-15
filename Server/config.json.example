@@ -1,4 +1,5 @@
 {
+  "_comment": "SystemCheck Server v4.0 - 一次性全量分析版（含自动修复命令 + 12h下载短链接）",
   "server": {
     "port": 8000,
     "host": "0.0.0.0"
@@ -110,7 +111,6 @@
     "enable_whitelist": true,
     "whitelist_keywords": [
       "system_check",
-      "linux_check-AI.sh",
       "client.sh",
       "busybox",
       "vuln",
@@ -118,7 +118,6 @@
       "security-agent",
       "cloud-monitor",
       "hostguard",
-      "win_client.exe",
       "windows_check.exe",
       "main.go"
     ]

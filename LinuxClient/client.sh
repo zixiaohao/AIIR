@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# CS架构 Client端 - 分批分析版本
-# 功能：收集系统数据，逐个模块发送到Server分析，最后汇总
+# CS架构 Client端 - 一次性全量分析版本
+# 功能：收集系统数据，一次性发送到Server进行AI分析（含自动修复命令）
 
 # 定义路径变量
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -56,9 +56,6 @@ fi
 filename="${input_string}_log.md"
 # 清空或创建日志文件
 > "$filename"
-
-# 存储各模块分析结果的数组
-declare -a section_results
 
 # 打印消息到控制台和日志文件
 print_msg() {
@@ -229,7 +226,7 @@ echo "================信息收集完成================"
 echo "日志已保存至: $filename"
 
 # =========================================================
-#                   发送数据到Server - 分批分析
+#                   发送数据到Server - 一次性发送
 # =========================================================
 echo -e "\n================发送数据到Server进行AI分析================"
 
@@ -310,121 +307,30 @@ fi
 # 构建IP信息
 ip_info="${internal_ip} / ${public_ip}"
 
-# 逐个模块发送分析
-echo "正在逐个模块发送到Server进行分析..."
+# 一次性发送所有数据
+echo "正在发送数据到Server进行分析..."
 
-# 读取日志文件并按模块分割
-current_section=""
-current_content=""
-section_count=0
+# 读取日志内容
+log_content=$(cat "$filename")
 
-while IFS= read -r line; do
-    if [[ "$line" == "## "* ]]; then
-        # 遇到新模块，先发送上一个模块
-        if [ -n "$current_section" ] && [ -n "$current_content" ]; then
-            section_count=$((section_count + 1))
-            echo "正在分析模块 [$section_count]: $current_section"
-            
-            # 发送单个模块到Server
-            response=$(curl -s -X POST "${SERVER_URL}/analyze_section" \
-              -H "Content-Type: application/json" \
-              -d "{
-                \"section_title\": \"${current_section}\",
-                \"section_content\": $(echo "$current_content" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo "\"$current_content\""),
-                \"platform\": \"linux\"
-              }" 2>&1)
-            
-            # 解析响应
-            if command -v python3 &> /dev/null; then
-                success=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('success', False))" 2>/dev/null)
-                if [ "$success" = "True" ]; then
-                    result=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('analysis_result', '') or '')" 2>/dev/null)
-                    if [ -n "$result" ] && [ "$result" != "None" ]; then
-                        section_results+=("$result")
-                        echo "  -> 发现异常"
-                    else
-                        echo "  -> 无异常"
-                    fi
-                else
-                    error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', '未知错误'))" 2>/dev/null)
-                    echo "  -> 分析失败: $error"
-                fi
-            fi
-        fi
-        
-        # 开始新模块
-        current_section="${line#### }"
-        current_content=""
-    else
-        current_content+="$line\n"
-    fi
-done < "$filename"
-
-# 处理最后一个模块
-if [ -n "$current_section" ] && [ -n "$current_content" ]; then
-    section_count=$((section_count + 1))
-    echo "正在分析模块 [$section_count]: $current_section"
-    
-    response=$(curl -s -X POST "${SERVER_URL}/analyze_section" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"section_title\": \"${current_section}\",
-        \"section_content\": $(echo -e "$current_content" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo "\"$(echo -e "$current_content")\""),
-        \"platform\": \"linux\"
-      }" 2>&1)
-    
-    if command -v python3 &> /dev/null; then
-        success=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('success', False))" 2>/dev/null)
-        if [ "$success" = "True" ]; then
-            result=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('analysis_result', '') or '')" 2>/dev/null)
-            if [ -n "$result" ] && [ "$result" != "None" ]; then
-                section_results+=("$result")
-                echo "  -> 发现异常"
-            else
-                echo "  -> 无异常"
-            fi
-        else
-            error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', '未知错误'))" 2>/dev/null)
-            echo "  -> 分析失败: $error"
-        fi
-    fi
-fi
-
-echo ""
-echo "共分析了 $section_count 个模块"
-
-# =========================================================
-#                   汇总分析
-# =========================================================
-echo -e "\n================发送汇总请求进行最终研判================"
-
-# 构建汇总请求
-section_results_json="["
-for i in "${!section_results[@]}"; do
-    if [ $i -gt 0 ]; then
-        section_results_json+=","
-    fi
-    section_results_json+=$(echo "${section_results[$i]}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo "\"${section_results[$i]}\"")
-done
-section_results_json+="]"
-
-# 发送汇总请求
-response=$(curl -s -X POST "${SERVER_URL}/analyze_summary" \
+# 发送完整日志到Server（使用 /analyze 接口 - 一次性全量分析含自动修复命令）
+echo "[AI模式] 一次性全量分析（含自动修复命令）"
+response=$(curl -s -X POST "${SERVER_URL}/analyze" \
   -H "Content-Type: application/json" \
   -d "{
     \"ticket_id\": \"${input_string}\",
     \"hostname\": \"${hostname}\",
     \"ip_info\": \"${ip_info}\",
     \"platform\": \"linux\",
-    \"section_results\": ${section_results_json}
+    \"log_content\": $(echo "$log_content" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo "\"$log_content\"")
   }" 2>&1)
 
-# 解析最终响应
+# 解析响应
 if command -v python3 &> /dev/null; then
     success=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('success', False))" 2>/dev/null)
     
     if [ "$success" = "True" ]; then
-        echo "汇总分析完成！"
+        echo "分析完成！"
         
         # 保存分析报告到本地
         analysis_file="${input_string}_analysis_report.md"
@@ -446,75 +352,194 @@ with open(os.environ['ANALYSIS_FILE'], 'w', encoding='utf-8') as f:
         echo "报告已保存至: $analysis_file"
         
         # =========================================================
-#                   上传生成的md文件到Server
-# =========================================================
-echo -e "\n================上传生成的md文件到Server================"
-
-# 上传日志文件
-if [ -f "$filename" ]; then
-    echo "[上传] 正在上传日志文件: $filename"
-    log_content=$(cat "$filename" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null)
-    upload_response=$(curl -s -X POST "${SERVER_URL}/upload" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"filename\": \"${filename}\",
-        \"content\": ${log_content}
-      }" 2>&1)
-    
-    if command -v python3 &> /dev/null; then
-        upload_success=$(echo "$upload_response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('success', False))" 2>/dev/null)
-        if [ "$upload_success" = "True" ]; then
-            echo "  ✅ 日志文件上传成功"
-        else
-            upload_msg=$(echo "$upload_response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message', '未知错误'))" 2>/dev/null)
-            echo "  ❌ 日志文件上传失败: $upload_msg"
-        fi
-    fi
-else
-    echo "[警告] 日志文件不存在: $filename"
-fi
-
-# 上传分析报告文件
-if [ -f "$analysis_file" ]; then
-    echo "[上传] 正在上传分析报告: $analysis_file"
-    report_content=$(cat "$analysis_file" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null)
-    upload_response=$(curl -s -X POST "${SERVER_URL}/upload" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"filename\": \"${analysis_file}\",
-        \"content\": ${report_content}
-      }" 2>&1)
-    
-    if command -v python3 &> /dev/null; then
-        upload_success=$(echo "$upload_response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('success', False))" 2>/dev/null)
-        if [ "$upload_success" = "True" ]; then
-            echo "  ✅ 分析报告上传成功"
-        else
-            upload_msg=$(echo "$upload_response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message', '未知错误'))" 2>/dev/null)
-            echo "  ❌ 分析报告上传失败: $upload_msg"
-        fi
-    fi
-else
-    echo "[警告] 分析报告文件不存在: $analysis_file"
-fi
-
-echo ""
-
-# AI分析后询问是否运行OA/ERP分析
+        #  显示Server自动生成的下载短链接（12小时有效）
+        # =========================================================
         echo ""
-        read -p "是否运行OA/ERP系统高频漏洞日志分析? (y/n): " run_oa
-        if [[ "$run_oa" == "y" || "$run_oa" == "Y" ]]; then
-            echo "OA/ERP系统信息已记录，详细分析将由Server端完成。"
+        echo "================📥 文件下载短链接（12小时有效）================"
+        log_url=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('log_download_url',''))" 2>/dev/null)
+        analysis_url=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('analysis_download_url',''))" 2>/dev/null)
+        if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
+            echo "  📄 原始日志: $log_url"
         fi
+        if [ -n "$analysis_url" ] && [ "$analysis_url" != "None" ]; then
+            echo "  📊 分析报告: $analysis_url"
+        fi
+        if [ -z "$log_url" ] || [ "$log_url" = "None" ]; then
+            echo "  (文件上传中，下载链接生成中...)"
+        fi
+        echo "=============================================================="
+        
+        # ============================================================
+        # 自动修复命令执行器（集成到主程序）
+        # ============================================================
+        
+        # 颜色定义
+        _EXEC_RED='\033[0;31m'
+        _EXEC_GREEN='\033[0;32m'
+        _EXEC_YELLOW='\033[0;33m'
+        _EXEC_BLUE='\033[0;34m'
+        _EXEC_CYAN='\033[0;36m'
+        _EXEC_NC='\033[0m'
+        _EXEC_BOLD='\033[1m'
+        
+        _EXECUTED_COUNT=0
+        _SKIPPED_COUNT=0
+        _FAILED_COUNT=0
+        
+        _exec_show_action_detail() {
+            local index=$1 total=$2 description=$3 command=$4 risk_level=$5 category=$6
+            echo ""
+            echo "════════════════════════════════════════════"
+            echo -e "  ${_EXEC_BOLD}操作 [$index/$total]${_EXEC_NC}"
+            echo "════════════════════════════════════════════"
+            case "$risk_level" in
+                high)   echo -e "  ${_EXEC_RED}${_EXEC_BOLD}风险等级: 🔴 高危${_EXEC_NC}" ;;
+                medium) echo -e "  ${_EXEC_YELLOW}${_EXEC_BOLD}风险等级: 🟡 中危${_EXEC_NC}" ;;
+                low)    echo -e "  ${_EXEC_GREEN}${_EXEC_BOLD}风险等级: 🟢 低危${_EXEC_NC}" ;;
+                *)      echo -e "  风险等级: ⚪ 未知" ;;
+            esac
+            echo -e "  ${_EXEC_BLUE}类别:${_EXEC_NC} $category"
+            echo ""
+            echo -e "  ${_EXEC_BOLD}描述:${_EXEC_NC} $description"
+            echo ""
+            echo -e "  ${_EXEC_CYAN}命令:${_EXEC_NC} ${_EXEC_BOLD}$command${_EXEC_NC}"
+            if [ "$risk_level" = "high" ]; then
+                echo ""
+                echo -e "  ${_EXEC_RED}${_EXEC_BOLD}⚠️  高风险操作警告！此操作可能会对系统产生重大影响。${_EXEC_NC}"
+            fi
+            echo "════════════════════════════════════════════"
+        }
+        
+        _exec_run_command() {
+            local command=$1 description=$2 risk_level=$3 category=$4 index=$5 total=$6
+            _exec_show_action_detail "$index" "$total" "$description" "$command" "$risk_level" "$category"
+            
+            if [ "$risk_level" = "high" ]; then
+                echo ""
+                echo -ne "${_EXEC_RED}⚠️  高风险操作，请再次输入 YES 确认执行:${_EXEC_NC} "
+                read -r double_confirm
+                if [ "$double_confirm" != "YES" ]; then
+                    echo -e "${_EXEC_YELLOW}↻ 已跳过${_EXEC_NC}"; _SKIPPED_COUNT=$((_SKIPPED_COUNT+1)); return
+                fi
+            fi
+            
+            echo ""
+            echo -ne "${_EXEC_CYAN}是否执行此操作? (y=执行 / n=跳过) [默认: n]:${_EXEC_NC} "
+            read -r confirm
+            case "$confirm" in
+                y|Y|yes|YES)
+                    echo ""; echo -e "${_EXEC_BLUE}正在执行...${_EXEC_NC}"
+                    output=$(eval "$command" 2>&1)
+                    exit_code=$?
+                    if [ $exit_code -eq 0 ]; then
+                        echo -e "${_EXEC_GREEN}✅ 执行成功${_EXEC_NC}"
+                        [ -n "$output" ] && echo "$output" | head -20
+                        _EXECUTED_COUNT=$((_EXECUTED_COUNT+1))
+                    else
+                        echo -e "${_EXEC_RED}❌ 执行失败 (退出码: $exit_code)${_EXEC_NC}"
+                        [ -n "$output" ] && echo "$output" | head -10
+                        _FAILED_COUNT=$((_FAILED_COUNT+1))
+                    fi ;;
+                *)
+                    echo -e "${_EXEC_YELLOW}↻ 已跳过${_EXEC_NC}"; _SKIPPED_COUNT=$((_SKIPPED_COUNT+1)) ;;
+            esac
+        }
+        
+        _exec_actions_inline() {
+            local response_data="$1"
+            
+            local actions_json
+            actions_json=$(echo "$response_data" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+actions = data.get('actions', [])
+if not actions:
+    report = data.get('analysis_report', '')
+    if report:
+        import re
+        for block in re.findall(r'\`\`\`json\s*\n(.*?)\n\`\`\`', report, re.DOTALL):
+            try:
+                parsed = json.loads(block.strip())
+                if isinstance(parsed, list): actions = parsed; break
+            except: pass
+print(json.dumps(actions))
+" 2>/dev/null || echo '[]')
+            
+            local action_count
+            action_count=$(echo "$actions_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+            
+            if [ -z "$action_count" ] || [ "$action_count" = "0" ]; then
+                echo -e "${_EXEC_YELLOW}⚠️  没有发现可执行的修复操作。${_EXEC_NC}"; return
+            fi
+            
+            echo ""
+            echo "=============================================="
+            echo "     🛠️  自动修复命令执行器"
+            echo "     逐条确认 · 安全可控"
+            echo "=============================================="
+            echo ""
+            echo -e "${_EXEC_GREEN}发现 $action_count 条建议修复操作${_EXEC_NC}"
+            echo -e "${_EXEC_YELLOW}请逐条确认是否执行:${_EXEC_NC}"
+            echo ""
+            
+            for i in $(seq 1 "$action_count"); do
+                local idx=$((i-1))
+                local item cmd desc risk cat
+                item=$(echo "$actions_json" | python3 -c "import sys,json;a=json.load(sys.stdin);print(json.dumps(a[$idx]) if $idx<len(a) else '{}')" 2>/dev/null)
+                cmd=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('command',''))" 2>/dev/null)
+                desc=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('description',''))" 2>/dev/null)
+                risk=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('risk_level','medium'))" 2>/dev/null)
+                cat=$(echo "$item" | python3 -c "import sys,json;print(json.load(sys.stdin).get('category','general'))" 2>/dev/null)
+                [ -n "$cmd" ] && _exec_run_command "$cmd" "$desc" "$risk" "$cat" "$i" "$action_count"
+                echo ""
+            done
+            
+            echo ""
+            echo "=============================================="
+            echo "     执行总结"
+            echo "=============================================="
+            echo -e "  ${_EXEC_GREEN}✅ 已执行: $_EXECUTED_COUNT${_EXEC_NC}"
+            echo -e "  ${_EXEC_YELLOW}↻ 已跳过: $_SKIPPED_COUNT${_EXEC_NC}"
+            echo -e "  ${_EXEC_RED}❌ 执行失败: $_FAILED_COUNT${_EXEC_NC}"
+            local total=$((_EXECUTED_COUNT+_SKIPPED_COUNT+_FAILED_COUNT))
+            [ $total -gt 0 ] && echo -e "  ${_EXEC_BLUE}执行率: $((_EXECUTED_COUNT*100/total))%${_EXEC_NC}"
+            echo "=============================================="
+            echo ""
+        }
+        
+        # =========================================================
+        #                   自动修复操作调用
+        # =========================================================
+        echo ""
+        echo "=========================================="
+        echo "         🛠️  自动修复操作建议              "
+        echo "=========================================="
+        
+        actions_count=$(echo "$response" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('actions', [])))" 2>/dev/null || echo "0")
+        
+        if [ -n "$actions_count" ] && [ "$actions_count" != "0" ]; then
+            echo "[信息] AI分析了 $actions_count 条可执行的修复操作"
+            echo ""
+            read -p "是否执行自动修复操作？每条操作都会单独确认 (y/n): " execute_actions
+            
+            if [[ "$execute_actions" == "y" || "$execute_actions" == "Y" || "$execute_actions" == "yes" || "$execute_actions" == "YES" ]]; then
+                _exec_actions_inline "$response"
+            else
+                echo "[信息] 用户取消执行自动修复操作"
+            fi
+        else
+            echo "[信息] AI分析未发现需要自动修复的问题"
+        fi
+        
+        echo ""
     else
         error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', '未知错误'))" 2>/dev/null)
-        echo "汇总分析失败: $error"
+        echo "分析失败: $error"
     fi
 else
     echo "Server响应:"
     echo "$response"
 fi
-
 
 # =========================================================
 #             后续可选操作：本地漏洞扫描

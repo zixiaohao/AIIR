@@ -6,58 +6,57 @@
 
 SystemCheck 是一套完整的安全应急响应解决方案，包含：
 
-- **Server端**：Flask Web服务，接收客户端数据，调用AI模型进行模块化安全分析
+- **Server端**：Flask Web服务，接收客户端数据，调用AI模型进行一次性全量安全分析（含自动修复命令）
 - **Linux客户端**：Shell脚本，自动收集Linux系统安全信息并上报
 - **Windows客户端**：Go语言程序，自动收集Windows系统安全信息并上报
-- **增强版客户端（gaint）**：支持一次性全量分析的增强版本
 
 ## 🏗️ 项目结构
 
 ```
 system_check/
 ├── Server/                     # 服务端
-│   ├── server.py              # Flask主服务（API接口、AI分析引擎）
+│   ├── server.py              # Flask主服务（一次性全量分析API）
 │   ├── ai_manager.py          # AI模型管理命令行工具
 │   ├── config.json            # 服务配置文件（AI模型、限流、对象存储等）
 │   ├── aescode.py             # AES加解密模块
 │   ├── attack_patterns.json   # 攻击特征库
 │   ├── install_deps.sh        # 依赖安装脚本
+│   ├── docker-compose.yml     # Docker部署配置
+│   ├── Dockerfile             # Docker镜像构建文件
+│   ├── docker-entrypoint.sh   # Docker入口脚本
+│   ├── .env.example           # 环境变量示例
 │   └── README.md              # Server端说明
-├── LinuxClient/               # Linux客户端（分批分析版）
-│   ├── client.sh              # 主脚本
+├── LinuxClient/               # Linux客户端（一次性全量分析 + 自动修复）
+│   ├── client.sh              # 主脚本（含自动修复命令执行器）
 │   ├── busybox                # 兼容性工具
 │   └── vuln                   # 漏洞检测工具
-├── linuxclient_gaint/         # Linux增强客户端（一次性分析 + 自动修复）
-│   ├── client_gaint.sh        # 增强版主脚本（已集成自动修复执行器）
-│   ├── busybox
-│   └── vuln
-├── winClient/                 # Windows客户端（分批分析版）
+├── winClient/                 # Windows客户端（一次性全量分析 + 自动修复）
 │   ├── main.go                # Go源码
 │   ├── go.mod / go.sum        # Go模块依赖
 │   └── README.md              # Windows客户端说明
-├── windowsclient_gaint/       # Windows增强客户端（一次性分析 + 自动修复）
-│   ├── main_gaint.go          # 增强版Go源码（已集成自动修复执行器）
-│   ├── go.mod / go.sum
-│   └── README.md
+├── install.sh                 # 一键安装脚本
 ├── .gitignore
 └── README.md                  # 项目总说明（本文件）
 ```
 
 ## ✨ 核心功能
 
-### Server端
+### Server端（v4.0）
 - 🤖 **多AI模型支持**：DeepSeek、OpenAI GPT-4、Claude、智谱GLM-4、Moonshot、通义千问、MiMo、MiniMax 等
-- 📊 **模块化分析**：将日志按模块拆分，逐个分析后汇总研判
-- 🔍 **一次性全量分析**：支持大上下文窗口模型一次性分析所有数据
+- 🔍 **一次性全量分析**：使用大上下文窗口模型一次性分析所有数据
+- 🛠️ **自动修复命令生成**：AI分析后自动输出可执行的修复命令（JSON格式）
 - 🛡️ **IP限流与黑名单**：防止API滥用
-- ☁️ **对象存储集成**：支持S3兼容存储（可选）
+- ☁️ **对象存储集成**：S3优先，本地文件系统备选
+- 📥 **短链接生成**：分析完成后自动生成12小时有效的文件下载短链接
 - 📋 **白名单机制**：自动排除已知安全进程，减少误报
 
-### 客户端
+### 客户端（v4.0）
 - 🖥️ **系统信息采集**：进程、网络连接、计划任务、系统日志、安全配置等
 - 🔎 **本地攻击特征匹配**：内置攻击模式库，预筛可疑项
-- 📡 **自动上报与分析**：采集完成后自动发送至Server进行AI分析
-- 📄 **报告生成**：Server返回结构化Markdown安全报告
+- 📡 **一次性上报**：采集完成后一次性发送至Server进行AI全量分析
+- 🤖 **自动修复执行器**：分析完成后逐条确认执行AI建议的修复命令
+- 📄 **报告生成**：结构化Markdown安全报告，支持本地保存和云端下载
+- 📥 **下载短链接**：终端显示12小时有效的文件下载链接
 
 ## 🚀 一键安装脚本（Linux）
 
@@ -66,7 +65,7 @@ system_check/
 ### 功能特点
 
 - 🐳 **Docker 自动安装**：自动检测并安装 Docker 和 Docker Compose
-- 🌐 **网络加速**自动检测网络状况，支持代理配置和镜像加速
+- 🌐 **网络加速**：自动检测网络状况，支持代理配置和镜像加速
 - 🔧 **一键编译 exe**：使用 Docker 交叉编译 Windows 客户端
 - 📦 **自动部署**：源码克隆后自动部署服务
 - 🔄 **一键升级**：自动更新源码并重建服务
@@ -230,6 +229,7 @@ cd LinuxClient
 chmod +x client.sh busybox vuln
 ./client.sh
 # 输入工单号后自动开始采集和分析
+# 分析完成后会显示12小时有效的下载短链接
 ```
 
 ### 4. 使用Windows客户端
@@ -240,7 +240,7 @@ cd winClient
 # 编译
 go build -o windows_check.exe main.go
 
-# 运（需要管理员权限）
+# 运行（需要管理员权限）
 windows_check.exe
 ```
 
@@ -264,15 +264,13 @@ Server端核心配置在 `Server/config.json`：
 | 接口 | 方法 | 说明 |
 |------|------|------|
 | `/health` | GET | 健康检查 |
-| `/models` | GET | 查看AI模型列表 |
-| `/analyze` | POST | 分批分析（模块化） |
-| `/analyze_full` | POST | 一次性全量分析 |
-| `/analyze_section` | POST | 分析单个模块 |
-| `/analyze_summary` | POST | 汇总分析 |
-| `/upload` | POST | 直接上传文件 |
+| `/models` | GET | 查看AI模型列表（只读） |
+| `/analyze` | POST | 一次性全量分析（含自动修复命令） |
+| `/upload` | POST | 直接上传文件（返回12h下载短链接） |
+| `/download/<token>` | GET | 下载文件（12小时有效） |
 | `/attack_patterns` | GET | 获取攻击特征库 |
-| `/ip_stats` | GET | IP访问统计 |
-| `/blacklist` | GET | 黑名单管理 |
+| `/ip_stats` | GET/POST | IP访问统计 |
+| `/blacklist` | GET/POST | 黑名单管理 |
 
 ## 🛠️ AI模型管理工具
 
@@ -288,22 +286,22 @@ python ai_manager.py rate-limit                        # 查看限流配置
 python ai_manager.py full-analysis-model               # 查看一次性分析模型
 ```
 
-## 🔧 自动修复操作功能（gaint版本）
+## 🔧 自动修复操作功能
 
-gaint版本的增强客户端支持**自动操作**功能，AI分析后会返回可执行的修复命令，每条命令都需要用户确认后才执行，确保操作安全可控。
+AI分析后会返回可执行的修复命令，每条命令都需要用户确认后才执行，确保操作安全可控。
 
 ### 工作流程
 
 ```
 ┌────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   收集系统信息    │ ──► │   AI智能分析     │ ──► │  返回报告+命令   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                                                        ▼
-                                            ┌─────────────────────────┐
-                                            │   逐条确认执行修复命令    │
-                                            │   (每条都需要用户确认)    │
-                                            └─────────────────────────┘
+│   收集系统信息   │ ──► │   AI智能分析     │ ──► │  返回报告+命令    │
+└────────────────┘     └─────────────────┘     └─────────────────┘
+                                                       │
+                                                       ▼
+                                           ┌─────────────────────────┐
+                                           │   逐条确认执行修复命令    │
+                                           │   (每条都需要用户确认)     │
+                                           └─────────────────────────┘
 ```
 
 ### 使用方法
@@ -311,24 +309,22 @@ gaint版本的增强客户端支持**自动操作**功能，AI分析后会返回
 #### Linux客户端
 
 ```bash
-# 1. 启动增强版客户端（会自动调用/analyze_with_actions接口）
-cd linuxclient_gaint
-chmod +x client_gaint.sh
-./client_gaint.sh
+# 1. 启动客户端（会自动调用/analyze接口）
+cd LinuxClient
+chmod +x client.sh
+./client.sh
 
 # 2. 分析完成后，自动进入命令执行流程（逐条确认）
-#    执行器已集成到主脚本中，无需单独调用
 ```
 
 #### Windows客户端
 
 ```bash
-# 1. 启动增强版客户端（会自动调用/analyze_with_actions接口）
-cd windowsclient_gaint
-go run main_gaint.go -s http://server:8000
+# 1. 启动客户端（会自动调用/analyze接口）
+cd winClient
+go run main.go -s http://server:8000
 
 # 2. 分析完成后，自动进入命令执行流程（逐条确认）
-#    执行器已集成到主程序中，无需单独编译
 ```
 
 ### 命令格式
@@ -377,7 +373,7 @@ AI返回的修复命令采用结构化JSON格式：
 
 ⚠️  高风险操作，请再次输入 YES 确认执行: YES
 
-是否执行此操作? (y=执行 / n=跳过 / v=查看详情) [默认: n]: y
+是否执行此操作? (y=执行 / n=跳过) [默认: n]: y
 
 正在执行...
 ✅ 执行成功
@@ -407,7 +403,7 @@ AI返回的修复命令采用结构化JSON格式：
 
 1. **安全优先**：所有操作都需要用户显式确认，高风险操作需要二次确认
 2. **幂等设计**：建议AI生成的命令是幂等的（可安全重复执行）
-3. **日志记录**：可通过`-l`参数指定日志文件，记录所有操作历史
+3. **日志记录**：所有操作历史均会记录
 4. **权限要求**：部分操作（如停止服务、修改防火墙）需要root/管理员权限
 
 ## 🔄 源码部署迁移到Docker
@@ -441,52 +437,35 @@ docker-compose logs -f
 
 当项目有新版本发布时，使用以下步骤快速更新：
 
-### 1. 拉取最新代码
-
 ```bash
 cd AIIR
+
+# 拉取最新代码
 git pull origin main
-```
 
-### 2. 更新Docker镜像并重启
-
-```bash
+# 停止旧容器并重建
 cd Server
-
-# 停止并删除旧容器
 docker-compose down
-
-# 重新构建镜像（强制拉取最新依赖）
 docker-compose build --no-cache
-
-# 启动新容器
 docker-compose up -d
 
 # 查看更新后的日志
 docker-compose logs -f
 ```
 
-### 3. 一键更新脚本
+## 📥 文件下载短链接
 
-也可以将上述步骤写入脚本，实现一键更新：
+v4.0版本新增自动文件保存和短链接生成功能：
 
-```bash
-#!/bin/bash
-# update.sh - 一键更新AIIR Server
+- **自动保存**：Server接收到分析请求后，自动将原始日志和分析报告保存到对象存储/本地
+- **12小时有效**：生成12小时有效的下载链接，过期自动失效
+- **终端显示**：Client分析完成后直接在终端显示下载链接
 
-cd "$(dirname "$0")" || exit 1
-
-echo "[*] 正在拉取最新代码..."
-git pull origin main || exit 1
-
-echo "[*] 正在更新Docker容器..."
-cd Server
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
-
-echo "[*] 更新完成！"
-echo "[*] 查看日志: docker-compose logs -f"
+```
+================📥 文件下载短链接（12小时有效）================
+  📄 原始日志: http://192.168.1.100:8000/download/abc123-def456
+  📊 分析报告: http://192.168.1.100:8000/download/ghi789-jkl012
+==============================================================
 ```
 
 ## 📌 注意事项
