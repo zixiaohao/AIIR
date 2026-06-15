@@ -1346,9 +1346,10 @@ func checkOASecurityDeepScan() {
 
 // 调用AI API（用于OA深度分析）
 func callDeepSeekAPI(systemPrompt, userContent string) string {
+	callHostname, _ := os.Hostname()
 	requestBody := map[string]interface{}{
 		"ticket_id":   "oa_deep_scan",
-		"hostname":    hostname,
+		"hostname":    callHostname,
 		"ip_info":     "oa_deep_scan",
 		"log_content": fmt.Sprintf("# 分析任务\n%s\n\n# 日志内容\n%s", systemPrompt, userContent),
 	}
