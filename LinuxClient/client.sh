@@ -8,7 +8,7 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 # ================= 配置区域 =================
 # Server地址（可通过环境变量AIIR_SERVER_URL设置默认值）
-DEFAULT_SERVER_URL="${AIIR_SERVER_URL:-http://36.212.5.163:8000}"
+DEFAULT_SERVER_URL="${AIIR_SERVER_URL:-}"
 SERVER_URL=""
 # ===========================================
 
