@@ -13,7 +13,8 @@ CS架构 Server端 - 一次性AI分析版本
 
 import os
 import json
-import uuid
+import string
+import secrets
 import requests
 import sys
 from datetime import datetime, timedelta
@@ -679,7 +680,9 @@ def upload_to_s3(content, filename):
             f.write(content)
         
         # 生成本地下载令牌（12小时有效）
-        token = str(uuid.uuid4())
+        # 6位短令牌（62^6 ≈ 568亿组合），如 /d/K2xoNP
+        alphabet = string.ascii_letters + string.digits
+        token = ''.join(secrets.choice(alphabet) for _ in range(6))
         expires_at = datetime.now() + timedelta(hours=12)
         download_tokens[token] = {
             "filepath": local_file_path,
@@ -735,7 +738,7 @@ def generate_download_url(content, filename, request_host):
         # 清理过期的下载令牌
         cleanup_expired_tokens()
         
-        return f"http://{download_host}:{server_port}/download/{storage_ref}"
+        return f"http://{download_host}:{server_port}/d/{storage_ref}"
     
     return None
 
@@ -928,6 +931,7 @@ def upload_file():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/d/<token>', methods=['GET'])
 @app.route('/download/<token>', methods=['GET'])
 def download_file(token):
     """本地文件下载接口（带令牌验证，12小时有效）"""
@@ -1140,6 +1144,7 @@ if __name__ == '__main__':
 ║  - GET  /models           查看模型列表（只读）                ║
 ║  - POST /analyze          一次性全量分析（含修复命令）        ║
 ║  - POST /upload           上传文件（返回下载短链接）          ║
+║  - GET  /d/<token>        短链接下载（等同 /download）      ║
 ║  - GET  /download/<token> 下载文件（12h有效）                 ║
 ╚══════════════════════════════════════════════════════════════╝
 """
