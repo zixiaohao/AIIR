@@ -24,7 +24,7 @@ import (
 // 全局变量
 var (
 	serverURL        string
-	defaultServerURL string
+	defaultServerURL = "http://36.212.5.163:8000"
 	logFile          string
 	keywordsRegex    *regexp.Regexp
 	attackPatterns   map[string][]AttackPattern
