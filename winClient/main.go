@@ -36,6 +36,17 @@ var (
 	execLogFilePath   = ""
 )
 
+// i18n: UI language (default en for program, zh for reports)
+var uiLang string = "en"
+
+// t translates: returns en if uiLang=="en", zh if uiLang=="zh"
+func t(en, zh string) string {
+	if uiLang == "zh" {
+		return zh
+	}
+	return en
+}
+
 // AttackPattern 攻击模式定义
 type AttackPattern struct {
 	Pattern     string `json:"pattern"`
@@ -86,9 +97,9 @@ func requestElevation() {
 
 	err := windows.ShellExecute(0, verbPtr, exePtr, argPtr, cwdPtr, showCmd)
 	if err != nil {
-		fmt.Printf("[错误] 无法请求管理员权限: %v\n", err)
-		fmt.Println("请手动右键点击程序，选择'以管理员身份运行'")
-		fmt.Println("按回车键退出...")
+		fmt.Printf("[Error] Cannot request admin privileges: %v\n", err)
+		fmt.Println(t("Please right-click and select 'Run as Administrator'", "请手动右键点击程序，选择'以管理员身份运行'"))
+		fmt.Println(t("Press Enter to exit...", "按回车键退出..."))
 		fmt.Scanln()
 		os.Exit(1)
 	}
@@ -98,11 +109,11 @@ func requestElevation() {
 // 显示标题
 func showBanner() {
 	fmt.Println("╔══════════════════════════════════════════════════════════════╗")
-	fmt.Println("║           Windows 安全应急响应检测工具                      ║")
+	fmt.Println(t("║           Windows Security Emergency Response Tool            ║", "║           Windows 安全应急响应检测工具                      ║"))
 	fmt.Println("║                    CS客户端版 v4.0                          ║")
 	fmt.Println("╠══════════════════════════════════════════════════════════════╣")
-	fmt.Println("║  功能: 收集系统安全信息，一次性发送到Server进行AI分析      ║")
-	fmt.Println("║  特点: 全量分析、自动修复命令、12h下载短链接                ║")
+	fmt.Println(t("║  Collect system info, send to Server for AI analysis          ║", "║  功能: 收集系统安全信息，一次性发送到Server进行AI分析      ║"))
+	fmt.Println(t("║  One-shot analysis, auto-repair, 12h download links           ║", "║  特点: 全量分析、自动修复命令、12h下载短链接                ║"))
 	fmt.Println("╚══════════════════════════════════════════════════════════════╝")
 	fmt.Println()
 }
@@ -131,40 +142,40 @@ func showStatus(status string, success bool) {
 
 // 从Server获取攻击特征库
 func fetchAttackPatterns() bool {
-	fmt.Print("[特征库] 正在从Server获取攻击特征库...")
+	fmt.Print(t("[Patterns] Fetching attack patterns from Server...", "[特征库] 正在从Server获取攻击特征库..."))
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(serverURL + "/attack_patterns")
 	if err != nil {
-		fmt.Println(" ❌ 失败")
-		fmt.Printf("[警告] 无法获取特征库: %v\n", err)
+		fmt.Println(t(" ❌ Failed", " ❌ 失败"))
+		fmt.Printf("[Warning] Cannot fetch patterns: %v\n", err)
 		return false
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(" ❌ 失败")
-		fmt.Printf("[警告] 读取响应失败: %v\n", err)
+		fmt.Println(t(" ❌ Failed", " ❌ 失败"))
+		fmt.Printf("[Warning] Failed to read response: %v\n", err)
 		return false
 	}
 
 	var response AttackPatternsResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		fmt.Println(" ❌ 失败")
-		fmt.Printf("[警告] 解析特征库失败: %v\n", err)
+		fmt.Println(t(" ❌ Failed", " ❌ 失败"))
+		fmt.Printf("[Warning] Failed to parse patterns: %v\n", err)
 		return false
 	}
 
 	if response.Success {
 		attackPatterns = response.Patterns
-		fmt.Println(" ✅ 成功")
-		fmt.Printf("[特征库] 已加载 %d 类攻击特征\n", len(attackPatterns))
+		fmt.Println(t(" ✅ OK", " ✅ 成功"))
+		fmt.Printf("[Patterns] Loaded %d attack pattern categories\n", len(attackPatterns))
 		return true
 	} else {
-		fmt.Println(" ❌ 失败")
-		fmt.Printf("[警告] %s\n", response.Error)
+		fmt.Println(t(" ❌ Failed", " ❌ 失败"))
+		fmt.Printf("[Warning] %s\n", response.Error)
 		return false
 	}
 }
@@ -193,21 +204,21 @@ func logActionExec(status, desc, command, output string) {
 func showActionDetailExec(index, total int, description, command, riskLevel, category string) {
 	fmt.Println()
 	fmt.Println("════════════════════════════════════════════")
-	fmt.Printf("  操作 [%d/%d]\n", index, total)
+	fmt.Printf("  Action [%d/%d]\n", index, total)
 	fmt.Println("════════════════════════════════════════════")
 
 	switch riskLevel {
 	case "high":
-		fmt.Printf("  风险等级: 🔴 高危\n")
+		fmt.Printf("  Risk: 🔴 HIGH\n")
 	case "medium":
-		fmt.Printf("  风险等级: 🟡 中危\n")
+		fmt.Printf("  Risk: 🟡 MEDIUM\n")
 	case "low":
-		fmt.Printf("  风险等级: 🟢 低危\n")
+		fmt.Printf("  Risk: 🟢 LOW\n")
 	default:
-		fmt.Printf("  风险等级: ⚪ 未知\n")
+		fmt.Printf("  Risk: ⚪ UNKNOWN\n")
 	}
 
-	fmt.Printf("  类别: %s\n", category)
+	fmt.Printf("  Category: %s\n", category)
 	fmt.Println()
 	fmt.Println("  描述:")
 	fmt.Printf("  %s\n", description)
@@ -231,7 +242,7 @@ func executeCommandExec(command, description, riskLevel, category string, index,
 
 	if riskLevel == "high" {
 		fmt.Println()
-		fmt.Print("⚠️  高风险操作，请再次输入 YES 确认执行: ")
+		fmt.Print(t("⚠️  HIGH RISK - type YES to confirm: ", "⚠️  高风险操作，请再次输入 YES 确认执行: "))
 		doubleConfirm, _ := reader.ReadString('\n')
 		doubleConfirm = strings.TrimSpace(doubleConfirm)
 		if doubleConfirm != "YES" {
@@ -243,7 +254,7 @@ func executeCommandExec(command, description, riskLevel, category string, index,
 	}
 
 	fmt.Println()
-	fmt.Print("是否执行此操作? (y=执行 / n=跳过 / v=查看详情) [默认: n]: ")
+	fmt.Print(t("Execute? (y=run / n=skip / v=view details) [default: n]: ", "是否执行此操作? (y=执行 / n=跳过 / v=查看详情) [默认: n]: "))
 	confirm, _ := reader.ReadString('\n')
 	confirm = strings.TrimSpace(confirm)
 
@@ -293,7 +304,7 @@ func executeCommandExec(command, description, riskLevel, category string, index,
 		fmt.Println("此操作会执行以下命令:")
 		fmt.Printf("  %s\n", command)
 		fmt.Println()
-		fmt.Print("是否执行此操作? (y/n) [默认: n]: ")
+		fmt.Print(t("Execute? (y/n) [default: n]: ", "是否执行此操作? (y/n) [默认: n]: "))
 		retryConfirm, _ := reader.ReadString('\n')
 		retryConfirm = strings.TrimSpace(retryConfirm)
 		if strings.ToLower(retryConfirm) == "y" || strings.ToLower(retryConfirm) == "yes" {
@@ -366,7 +377,7 @@ func executeActionsInline(responseData []byte, actions []Action, ticketID string
 	fmt.Println("==============================================")
 	fmt.Println()
 
-	fmt.Printf("发现 %d 条建议修复操作\n", len(actions))
+	fmt.Printf("Found %d suggested repair actions\n", len(actions))
 	fmt.Println("请逐条确认是否执行:")
 	fmt.Println()
 
@@ -386,18 +397,18 @@ func executeActionsInline(responseData []byte, actions []Action, ticketID string
 	fmt.Println("==============================================")
 	fmt.Println("     执行总结")
 	fmt.Println("==============================================")
-	fmt.Printf("  ✅ 已执行: %d\n", execExecutedCount)
-	fmt.Printf("  ↻ 已跳过: %d\n", execSkippedCount)
-	fmt.Printf("  ❌ 执行失败: %d\n", execFailedCount)
+	fmt.Printf("  ✅ Executed: %d\n", execExecutedCount)
+	fmt.Printf("  ↻ Skipped: %d\n", execSkippedCount)
+	fmt.Printf("  ❌ Failed: %d\n", execFailedCount)
 	total := execExecutedCount + execSkippedCount + execFailedCount
 	if total > 0 {
-		fmt.Printf("  执行率: %d%%\n", execExecutedCount*100/total)
+		fmt.Printf("  Success rate: %d%%\n", execExecutedCount*100/total)
 	}
 	fmt.Println("==============================================")
 	fmt.Println()
 
 	if execLogFilePath != "" {
-		fmt.Printf("[日志文件] %s\n", execLogFilePath)
+		fmt.Printf("[Log file] %s\n", execLogFilePath)
 	}
 }
 
@@ -407,30 +418,35 @@ func main() {
 	var showHelp bool
 	flag.StringVar(&serverAddr, "s", "", "Server地址 (格式: http://IP:端口)")
 	flag.StringVar(&serverAddr, "server", "", "Server地址 (格式: http://IP:端口)")
+	var langFlag string
+	flag.StringVar(&langFlag, "lang", "en", "UI language (en/zh)")
 	flag.BoolVar(&showHelp, "h", false, "显示帮助信息")
 	flag.BoolVar(&showHelp, "help", false, "显示帮助信息")
 	flag.Parse()
 
+	uiLang = langFlag
+
 	// 显示帮助信息
 	if showHelp {
-		fmt.Println("Windows 安全应急响应检测工具 v3.1 (gaint版本)")
+		fmt.Println(t("AIIR - Windows Incident Response Tool v3.1", "AIIR - Windows应急响应检测工具 v3.1"))
 		fmt.Println()
-		fmt.Println("用法:")
-		fmt.Println("  windows_check_gaint.exe -s <Server地址>")
-		fmt.Println("  windows_check_gaint.exe --server <Server地址>")
+		fmt.Println(t("Usage:", "用法:"))
+		fmt.Println("  windows_check-v4.exe -s <Server>")
+		fmt.Println("  windows_check-v4.exe --server <Server>")
 		fmt.Println()
-		fmt.Println("参数:")
-		fmt.Println("  -s, --server    指定Server地址 (格式: http://IP:端口)")
-		fmt.Println("  -h, --help      显示此帮助信息")
+		fmt.Println(t("Options:", "参数:"))
+		fmt.Println(t("  -s, --server    Specify Server address (format: http://IP:port)", "  -s, --server    指定Server地址 (格式: http://IP:端口)"))
+		fmt.Println(t("  -h, --help      Show this help", "  -h, --help      显示此帮助信息"))
+		fmt.Println(t("  -lang       Set UI language (en/zh, default: en)", "  -lang       设置UI语言 (en/zh, 默认: en)"))
 		fmt.Println()
-		fmt.Println("示例:")
-		fmt.Println("  windows_check_gaint.exe -s http://192.168.1.100:8000")
-		fmt.Println("  windows_check_gaint.exe --server http://10.0.0.50:8000")
+		fmt.Println(t("Examples:", "示例:"))
+		fmt.Println("  windows_check-v4.exe -s http://192.168.1.100:8000")
+		fmt.Println("  windows_check-v4.exe --server http://10.0.0.50:8000")
 		fmt.Println()
-		fmt.Println("注意:")
-		fmt.Println("  - 程序需要管理员权限运行")
-		fmt.Println("  - 如果不指定Server地址，程序将询问用户输入")
-		fmt.Println("  - gaint版本采用一次性发送模式，适合大上下文窗口模型")
+		fmt.Println(t("Note:", "注意:"))
+		fmt.Println(t("  - Requires admin privileges", "  - 程序需要管理员权限运行"))
+		fmt.Println(t("  - Prompts for Server address if not specified", "  - 如果不指定Server地址，程序将询问用户输入"))
+		fmt.Println(t("  - One-shot mode, suitable for large context window models", "  - gaint版本采用一次性发送模式，适合大上下文窗口模型"))
 		return
 	}
 
@@ -439,17 +455,17 @@ func main() {
 		serverURL = serverAddr
 	} else if defaultServerURL != "" {
 		serverURL = defaultServerURL
-		fmt.Printf("[Server地址] %s (编译时预置)\n", serverURL)
+		fmt.Printf("[Server] %s (compiled preset)\n", serverURL)
 	} else {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("请输入Server地址 (格式: http://IP:端口): ")
+		fmt.Print(t("Enter Server address (format: http://IP:port): ", "请输入Server地址 (格式: http://IP:端口): "))
 		input, _ := reader.ReadString('\n')
 		serverURL = strings.TrimSpace(input)
 
 		if serverURL == "" {
-			fmt.Println("[错误] Server地址不能为空！")
-			fmt.Println("[提示] 使用 -h 参数查看帮助信息")
-			fmt.Println("按回车键退出...")
+			fmt.Println(t("[Error] Server address cannot be empty!", "[错误] Server地址不能为空！"))
+			fmt.Println(t("[Hint] Use -h to view help", "[提示] 使用 -h 参数查看帮助信息"))
+			fmt.Println(t("Press Enter to exit...", "按回车键退出..."))
 			fmt.Scanln()
 			return
 		}
@@ -463,21 +479,21 @@ func main() {
 	if serverAddr != "" || defaultServerURL != "" {
 		// 已自动设置，不重复打印
 	} else {
-		fmt.Printf("[Server地址] %s\n", serverURL)
+		fmt.Printf("[Server] %s\n", serverURL)
 	}
 	fmt.Println()
 
 	// 检查管理员权限
 	if !checkAdmin() {
-		fmt.Println("[提示] 程序需要管理员权限才能完整收集系统信息")
-		fmt.Println("[提示] 正在请求管理员权限...")
+		fmt.Println(t("[Hint] Admin privileges required for full system info collection", "[提示] 程序需要管理员权限才能完整收集系统信息"))
+		fmt.Println(t("[Hint] Requesting admin privileges...", "[提示] 正在请求管理员权限..."))
 		time.Sleep(1 * time.Second)
 		requestElevation()
 	}
 
 	showBanner()
 
-	fmt.Println("[权限状态] ✅ 管理员权限")
+	fmt.Println(t("[Privilege] ✅ Administrator", "[权限状态] ✅ 管理员权限"))
 	fmt.Println()
 
 	// 从Server获取攻击特征库
@@ -486,13 +502,13 @@ func main() {
 
 	// 检查Server连接
 	serverConnected := false
-	fmt.Print("[连接测试] ")
+	fmt.Print(t("[Connection test] ", "[连接测试] "))
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(serverURL + "/health")
 	if err != nil {
 		fmt.Println("❌ 失败")
-		fmt.Printf("[错误] 无法连接到Server: %s\n", serverURL)
-		fmt.Println("[提示] 网络连接失败或Server未启动")
+		fmt.Printf("[Error] Cannot connect to Server: %s\n", serverURL)
+		fmt.Println(t("[Hint] Network connection failed or Server not started", "[提示] 网络连接失败或Server未启动"))
 		serverConnected = false
 	} else {
 		resp.Body.Close()
@@ -502,14 +518,14 @@ func main() {
 	fmt.Println()
 
 	// 获取工单ID
-	fmt.Print("请输入工单ID: ")
+	fmt.Print(t("Enter ticket ID: ", "请输入工单ID: "))
 	reader := bufio.NewReader(os.Stdin)
 	ticketID, _ := reader.ReadString('\n')
 	ticketID = strings.TrimSpace(ticketID)
 
 	if ticketID == "" {
-		fmt.Println("[错误] 工单ID不能为空！")
-		fmt.Println("按回车键退出...")
+		fmt.Println(t("[Error] Ticket ID cannot be empty!", "[错误] 工单ID不能为空！"))
+		fmt.Println(t("Press Enter to exit...", "按回车键退出..."))
 		fmt.Scanln()
 		return
 	}
@@ -523,8 +539,8 @@ func main() {
 	// 创建日志文件
 	f, err := os.Create(logFile)
 	if err != nil {
-		fmt.Printf("[错误] 创建日志文件失败: %v\n", err)
-		fmt.Println("按回车键退出...")
+		fmt.Printf("[Error] Failed to create log file: %v\n", err)
+		fmt.Println(t("Press Enter to exit...", "按回车键退出..."))
 		fmt.Scanln()
 		return
 	}
@@ -532,7 +548,7 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println("                    开始收集系统信息                          ")
+	fmt.Println("                    Collecting System Information                          ")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 	fmt.Println()
 
@@ -541,69 +557,69 @@ func main() {
 	currentStep := 0
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在收集系统信息...")
+	showProgress(currentStep, totalSteps, t("Collecting system info...", "正在收集系统信息..."))
 	checkSystemInfo()
-	showStatus("系统信息收集完成", true)
+	showStatus(t("System info collection complete", "系统Information Collection Complete"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查用户账户...")
+	showProgress(currentStep, totalSteps, t("Checking user accounts...", "正在检查用户账户..."))
 	checkUsers()
-	showStatus("用户账户检查完成", true)
+	showStatus(t("User account check complete", "用户账户检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查持久化...")
+	showProgress(currentStep, totalSteps, t("Checking persistence...", "正在检查持久化..."))
 	checkAdvancedPersistence()
-	showStatus("持久化检查完成", true)
+	showStatus(t("Persistence check complete", "持久化检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查网络连接...")
+	showProgress(currentStep, totalSteps, t("Checking network connections...", "正在检查网络连接..."))
 	checkNetwork()
-	showStatus("网络连接检查完成", true)
+	showStatus(t("Network check complete", "网络连接检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查用户活动...")
+	showProgress(currentStep, totalSteps, t("Checking user activity...", "正在检查用户活动..."))
 	checkUserActivity()
-	showStatus("用户活动检查完成", true)
+	showStatus(t("User activity check complete", "用户活动检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查WebShell...")
+	showProgress(currentStep, totalSteps, t("Checking WebShell...", "正在检查WebShell..."))
 	checkWebShell()
-	showStatus("WebShell检查完成", true)
+	showStatus(t("WebShell check complete", "WebShell检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查进程...")
+	showProgress(currentStep, totalSteps, t("Checking processes...", "正在检查进程..."))
 	checkProcesses()
-	showStatus("进程检查完成", true)
+	showStatus(t("Process check complete", "进程检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查启动项...")
+	showProgress(currentStep, totalSteps, t("Checking startup items...", "正在检查启动项..."))
 	checkStartup()
-	showStatus("启动项检查完成", true)
+	showStatus(t("Startup check complete", "启动项检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查安全日志...")
+	showProgress(currentStep, totalSteps, t("Checking security logs...", "正在检查安全日志..."))
 	checkSecurityLogs()
-	showStatus("安全日志检查完成", true)
+	showStatus(t("Security log check complete", "安全日志检查完成"), true)
 
 	currentStep++
-	showProgress(currentStep, totalSteps, "正在检查OA/ERP系统...")
+	showProgress(currentStep, totalSteps, t("Checking OA/ERP systems...", "正在检查OA/ERP系统..."))
 	checkOASecurity()
-	showStatus("OA/ERP检查完成", true)
+	showStatus(t("OA/ERP check complete", "OA/ERP检查完成"), true)
 
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println("                    信息收集完成                              ")
+	fmt.Println("                    Information Collection Complete                              ")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Printf("[日志文件] %s\n", logFile)
+	fmt.Printf("[Log file] %s\n", logFile)
 	fmt.Println()
 
 	// 根据Server连接状态决定是否发送数据
 	if !serverConnected {
 		fmt.Println()
 		fmt.Println("═══════════════════════════════════════════════════════════════")
-		fmt.Println("                    ⚠️ 网络连接失败                            ")
+		fmt.Println("                    ⚠️ Network Connection Failed                            ")
 		fmt.Println("═══════════════════════════════════════════════════════════════")
-		fmt.Println("[提示] 无法连接到Server，正在进行离线安全检查...")
+		fmt.Println(t("[Hint] Cannot connect to Server, performing offline security check...", "[提示] 无法连接到Server，正在进行离线安全检查..."))
 		fmt.Println()
 		
 		// 执行离线安全检查
@@ -611,23 +627,23 @@ func main() {
 		
 		fmt.Println()
 		fmt.Println("═══════════════════════════════════════════════════════════════")
-		fmt.Println("[提示] 系统信息已保存至本地日志文件")
-		fmt.Printf("[日志文件] %s\n", logFile)
+		fmt.Println(t("[Hint] System info saved to local log file", "[提示] 系统信息已保存至本地日志文件"))
+		fmt.Printf("[Log file] %s\n", logFile)
 		fmt.Println("═══════════════════════════════════════════════════════════════")
 		fmt.Println()
-		fmt.Println("请检查网络连接或联系安全团队处理日志文件")
-		fmt.Println("按任意键退出程序...")
+		fmt.Println(t("Please check network or contact security team", "请检查网络连接或联系安全团队处理日志文件"))
+		fmt.Println(t("Press any key to exit...", "按任意键退出程序..."))
 		fmt.Scanln()
 		return
 	}
 
 	// Server连接正常，启动AI分析（使用Server默认模型）
-	fmt.Println("[AI分析] 正在发送数据到Server进行分析...")
+	fmt.Println(t("[AI Analysis] Sending data to Server for analysis...", "[AI分析] 正在发送数据到Server进行分析..."))
 	sendDataToServer(ticketID, hostname)
 
 	// AI分析完成后询问是否进行OA/ERP深度分析
 	fmt.Println()
-	fmt.Print("是否进行OA/ERP系统高频漏洞日志深度分析? (y/n): ")
+	fmt.Print(t("Perform OA/ERP vulnerability log deep analysis? (y/n): ", "是否进行OA/ERP System Vulnerability Deep Analysis? (y/n): "))
 	confirm, _ := reader.ReadString('\n')
 	confirm = strings.TrimSpace(confirm)
 
@@ -704,13 +720,13 @@ func execCommand(name string, args ...string) string {
 func sendDataToServer(ticketID, hostname string) {
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println("              发送数据到Server - 一次性发送模式               ")
+	fmt.Println("              Send Data to Server - One-Shot Mode               ")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 
 	// 读取日志内容
 	content, err := os.ReadFile(logFile)
 	if err != nil {
-		fmt.Printf("[错误] 读取日志文件失败: %v\n", err)
+		fmt.Printf("[Error] Failed to read log file: %v\n", err)
 		return
 	}
 
@@ -724,20 +740,21 @@ func sendDataToServer(ticketID, hostname string) {
 		"ip_info":     ipInfo,
 		"platform":    "windows",
 		"log_content": string(content),
+		"lang":        "zh", // 报告默认中文
 	}
 
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
-		fmt.Printf("[错误] JSON编码失败: %v\n", err)
+		fmt.Printf("[Error] JSON encode failed: %v\n", err)
 		return
 	}
 
 	// 发送请求 - 使用 /analyze 接口（一次性全量分析含自动修复命令）
-	fmt.Printf("[发送请求] %s\n", serverURL)
-	fmt.Println("[AI模式] 一次性全量分析（含自动修复命令）")
+	fmt.Printf("[Sending request] %s\n", serverURL)
+	fmt.Println(t("[AI mode] One-shot full analysis (with auto-repair commands)", "[AI模式] 一次性全量分析（含自动修复命令）"))
 	resp, err := http.Post(serverURL+"/analyze", "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
-		fmt.Printf("[错误] 发送失败: %v\n", err)
+		fmt.Printf("[Error] Send failed: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -762,31 +779,31 @@ func sendDataToServer(ticketID, hostname string) {
 
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		fmt.Printf("[错误] 解析响应失败: %v\n", err)
+		fmt.Printf("[Error] Failed to parse response: %v\n", err)
 		return
 	}
 
 	if response.Success {
 		fmt.Println()
-		fmt.Println("✅ 分析完成!")
-		fmt.Printf("[分析系统] 安全应急响应分析平台\n")
+		fmt.Println(t("✅ Analysis Complete!", "✅ 分析完成!"))
+		fmt.Printf("[System] Security Emergency Response Analysis Platform\n")
 		if response.ModelUsed != "" {
-			fmt.Printf("[使用的模型] %s\n", response.ModelUsed)
+			fmt.Printf("[Model used] %s\n", response.ModelUsed)
 		}
 
 		// 保存分析报告到本地
 		reportFile := fmt.Sprintf("%s_analysis_report.md", ticketID)
 		err = os.WriteFile(reportFile, []byte(response.AnalysisReport), 0644)
 		if err != nil {
-			fmt.Printf("[警告] 保存报告失败: %v\n", err)
+			fmt.Printf("[Warning] Failed to save report: %v\n", err)
 		} else {
 			fmt.Println()
 			fmt.Println("═══════════════════════════════════════════════════════════════")
-			fmt.Println("                AI 安全应急响应分析报告                        ")
+			fmt.Println("                AI Security Emergency Response Report                        ")
 			fmt.Println("═══════════════════════════════════════════════════════════════")
 			fmt.Println(response.AnalysisReport)
 			fmt.Println("═══════════════════════════════════════════════════════════════")
-			fmt.Printf("[报告已保存] %s\n", reportFile)
+			fmt.Printf("[Report saved] %s\n", reportFile)
 		}
 
 		// =========================================================
@@ -794,16 +811,16 @@ func sendDataToServer(ticketID, hostname string) {
 		// =========================================================
 		fmt.Println()
 		fmt.Println("═══════════════════════════════════════════════════════════════")
-		fmt.Println("    📥 文件下载短链接（12小时有效）                             ")
+		fmt.Println("    📥 Download Links (valid 12h)                             ")
 		fmt.Println("═══════════════════════════════════════════════════════════════")
 		if response.LogDownloadURL != "" {
-			fmt.Printf("  📄 原始日志: %s\n", response.LogDownloadURL)
+			fmt.Printf("  📄 Original log: %s\n", response.LogDownloadURL)
 		}
 		if response.AnalysisDownloadURL != "" {
-			fmt.Printf("  📊 分析报告: %s\n", response.AnalysisDownloadURL)
+			fmt.Printf("  📊 Analysis report: %s\n", response.AnalysisDownloadURL)
 		}
 		if response.LogDownloadURL == "" && response.AnalysisDownloadURL == "" {
-			fmt.Println("  (文件已由Server自动保存，下载链接生成中...)")
+			fmt.Println("  (Files saved by Server, generating download links...)")
 		}
 		fmt.Println("═══════════════════════════════════════════════════════════════")
 
@@ -813,12 +830,12 @@ func sendDataToServer(ticketID, hostname string) {
 		if len(response.Actions) > 0 {
 			fmt.Println()
 			fmt.Println("═══════════════════════════════════════════════════════════════")
-			fmt.Println("              🛠️  自动修复操作建议                            ")
+			fmt.Println("              🛠️  Auto-Repair Actions                            ")
 			fmt.Println("═══════════════════════════════════════════════════════════════")
-			fmt.Printf("[信息] AI分析了 %d 条可执行的修复操作\n", len(response.Actions))
+			fmt.Printf("[Info] AI found %d executable repair actions\n", len(response.Actions))
 			fmt.Println()
 			
-			fmt.Print("是否执行自动修复操作？每条操作都会单独确认 (y/n): ")
+			fmt.Print(t("Execute auto-repair? Each action confirmed individually (y/n): ", "是否执行自动修复操作？每条操作都会单独确认 (y/n): "))
 			actionReader := bufio.NewReader(os.Stdin)
 			executeActions, _ := actionReader.ReadString('\n')
 			executeActions = strings.TrimSpace(executeActions)
@@ -827,19 +844,19 @@ func sendDataToServer(ticketID, hostname string) {
 				// 直接在主程序中执行，不再启动外部进程
 				executeActionsInline(body, response.Actions, ticketID)
 			} else {
-				fmt.Println("[信息] 用户取消执行自动修复操作")
+				fmt.Println(t("[Info] User cancelled auto-repair", "[信息] 用户取消执行自动修复操作"))
 			}
 		} else {
 			fmt.Println()
 			fmt.Println("═══════════════════════════════════════════════════════════════")
-			fmt.Println("              ℹ️  未发现需要修复的操作                         ")
+			fmt.Println("              ℹ️  No Actions Required                         ")
 			fmt.Println("═══════════════════════════════════════════════════════════════")
-			fmt.Println("[信息] AI分析未发现需要自动修复的问题")
+			fmt.Println(t("[Info] AI analysis found no issues requiring repair", "[信息] AI分析未发现需要自动修复的问题"))
 		}
 
 		fmt.Println()
 	} else {
-		fmt.Printf("[错误] Server返回错误: %s\n", response.Error)
+		fmt.Printf("[Error] Server returned error: %s\n", response.Error)
 	}
 }
 
@@ -880,7 +897,7 @@ func execCommandWithFallback(primary string, primaryArgs []string, fallback stri
 	}
 
 	// 主命令失败，使用备选方案
-	fmt.Printf(" [wmic不可用，使用备选方案]")
+	fmt.Printf(t(" [wmic unavailable, using fallback]", " [wmic不可用，使用备选方案]"))
 	cmd = exec.Command(fallback, fallbackArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	output, err = cmd.CombinedOutput()
@@ -1261,22 +1278,22 @@ func checkOASecurity() {
 func checkOASecurityDeepScan() {
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println("              OA/ERP系统高频漏洞日志深度分析                  ")
+	fmt.Println("              OA/ERP System Vulnerability Deep Analysis                  ")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 
 	writeLog("OA/ERP 安全深度分析")
-	fmt.Println("正在识别业务系统...")
+	fmt.Println(t("Identifying business systems...", "正在识别业务系统..."))
 
 	systems := identifySystems()
 
 	// 询问是否进行深度扫描（多盘符多目录）
 	fmt.Println()
-	fmt.Print("是否进行深度扫描（搜索所有盘符的Nginx/Tomcat/Apache日志）? (y/n): ")
+	fmt.Print(t("Deep scan all drives for Nginx/Tomcat/Apache logs? (y/n): ", "是否进行深度扫描（搜索所有盘符的Nginx/Tomcat/Apache日志）? (y/n): "))
 	reader := bufio.NewReader(os.Stdin)
 	deepScan, _ := reader.ReadString('\n')
 	deepScan = strings.TrimSpace(deepScan)
 	if strings.ToLower(deepScan) == "y" {
-		fmt.Println("正在进行深度扫描，请耐心等待...")
+		fmt.Println(t("Deep scanning, please wait...", "正在进行深度扫描，请耐心等待..."))
 		webServers := findWebServerLogs()
 		systems = append(systems, webServers...)
 	}
@@ -1291,17 +1308,17 @@ func checkOASecurityDeepScan() {
 	var allSuspiciousLogs []string
 
 	for _, sys := range systems {
-		fmt.Printf("发现系统: %s (路径: %s)\n", sys.Name, sys.Path)
+		fmt.Printf("Found system: %s (path: %s)\n", sys.Name, sys.Path)
 		writeLog(fmt.Sprintf("系统: %s (路径: %s)", sys.Name, sys.Path))
 
 		logFiles := findLogFiles(sys)
-		fmt.Printf("找到 %d 个日志文件\n", len(logFiles))
+		fmt.Printf("Found %d log files\n", len(logFiles))
 
 		for _, logFile := range logFiles {
-			fmt.Printf("正在分析日志: %s ...\n", logFile)
+			fmt.Printf("Analyzing log: %s ...\n", logFile)
 			suspicious := analyzeLogFile(logFile, sys.Name)
 			if len(suspicious) > 0 {
-				fmt.Printf("  -> 发现 %d 条可疑记录\n", len(suspicious))
+				fmt.Printf("  -> Found %d suspicious records\n", len(suspicious))
 				allSuspiciousLogs = append(allSuspiciousLogs, suspicious...)
 			}
 		}
@@ -1309,7 +1326,7 @@ func checkOASecurityDeepScan() {
 
 	if len(allSuspiciousLogs) > 0 {
 		writeCode(fmt.Sprintf("共发现 %d 条可疑日志，准备进行AI分析...", len(allSuspiciousLogs)))
-		fmt.Printf("共发现 %d 条可疑日志，正在进行AI分析...\n", len(allSuspiciousLogs))
+		fmt.Printf("Found %d suspicious logs, performing AI analysis...\n", len(allSuspiciousLogs))
 
 		// 分批分析
 		batchSize := 5
@@ -1339,7 +1356,7 @@ func checkOASecurityDeepScan() {
 			time.Sleep(1 * time.Second)
 		}
 	} else {
-		fmt.Println("未发现符合常见攻击特征的日志。")
+		fmt.Println(t("No logs matching common attack patterns found.", "未发现符合常见攻击特征的日志。"))
 		writeCode("未发现符合常见攻击特征的日志。")
 	}
 }
@@ -1437,7 +1454,7 @@ func findWebServerLogs() []SystemInfo {
 	foundPaths := make(map[string]bool)
 
 	drives := getAvailableDrives()
-	fmt.Printf("检测到盘符: %v\n", drives)
+	fmt.Printf("Detected drives: %v\n", drives)
 
 	webServerPatterns := []struct {
 		Name        string
@@ -1450,7 +1467,7 @@ func findWebServerLogs() []SystemInfo {
 	}
 
 	for _, drive := range drives {
-		fmt.Printf("正在扫描盘符 %s ...\n", drive)
+		fmt.Printf("Scanning drive %s ...\n", drive)
 
 		for _, server := range webServerPatterns {
 			for _, dirPattern := range server.DirPatterns {
@@ -1465,7 +1482,7 @@ func findWebServerLogs() []SystemInfo {
 								Type: server.Type,
 							})
 							foundPaths[path] = true
-							fmt.Printf("  发现 %s: %s\n", server.Name, path)
+							fmt.Printf("  Found %s: %s\n", server.Name, path)
 						}
 					}
 				}
@@ -1599,27 +1616,27 @@ func analyzeLogFile(path string, sysName string) []string {
 
 // 离线安全检查功能
 func performOfflineSecurityCheck() {
-	fmt.Println("正在执行离线安全检查...")
+	fmt.Println(t("Performing offline security check...", "正在执行离线安全检查..."))
 	fmt.Println()
 
 	findingsCount := 0
 
 	// 1. 检查可疑进程
-	fmt.Println("[1/8] 检查可疑进程...")
+	fmt.Println(t("[1/8] Checking suspicious processes...", "[1/8] 检查可疑进程..."))
 	suspiciousProcs := execCommand("powershell", "-Command", 
 		"Get-Process | Where-Object {$_.ProcessName -match '(cmd|powershell|wscript|cscript|mshta|rundll32|regsvr32)'} | Select-Object Id, Name, Path | Format-Table -AutoSize")
 	if !strings.Contains(suspiciousProcs, "没有运行") && len(strings.TrimSpace(suspiciousProcs)) > 50 {
-		fmt.Println("  ⚠️  发现可疑进程:")
+		fmt.Println(t("  ⚠️  Suspicious processes found:", "  ⚠️  发现可疑进程:"))
 		fmt.Println(suspiciousProcs)
 		findingsCount++
 		writeLog("## ⚠️ 离线检查 - 可疑进程")
 		writeCode(suspiciousProcs)
 	} else {
-		fmt.Println("  ✅ 未发现可疑进程")
+		fmt.Println(t("  ✅ No suspicious processes", "  ✅ 未发现可疑进程"))
 	}
 
 	// 2. 检查异常网络连接
-	fmt.Println("[2/8] 检查异常网络连接...")
+	fmt.Println(t("[2/8] Checking abnormal network connections...", "[2/8] 检查异常网络连接..."))
 	suspiciousNet := execCommand("netstat", "-ano")
 	// 过滤常见恶意端口
 	netLines := strings.Split(suspiciousNet, "\n")
@@ -1634,7 +1651,7 @@ func performOfflineSecurityCheck() {
 		}
 	}
 	if len(suspiciousConns) > 0 {
-		fmt.Println("  ⚠️  发现异常网络连接:")
+		fmt.Println(t("  ⚠️  Abnormal connections found:", "  ⚠️  发现异常网络连接:"))
 		for _, conn := range suspiciousConns {
 			fmt.Printf("    - %s\n", conn)
 		}
@@ -1642,48 +1659,48 @@ func performOfflineSecurityCheck() {
 		writeLog("## ⚠️ 离线检查 - 异常网络连接")
 		writeCode(strings.Join(suspiciousConns, "\n"))
 	} else {
-		fmt.Println("  ✅ 未发现异常网络连接")
+		fmt.Println(t("  ✅ No abnormal connections", "  ✅ 未发现异常网络连接"))
 	}
 
 	// 3. 检查计划任务
-	fmt.Println("[3/8] 检查计划任务...")
+	fmt.Println(t("[3/8] Checking scheduled tasks...", "[3/8] 检查计划任务..."))
 	schTasks := execCommand("schtasks", "/query", "/fo", "csv", "/v")
 	if strings.Contains(schTasks, "powershell") || strings.Contains(schTasks, "cmd") || strings.Contains(schTasks, "wscript") {
-		fmt.Println("  ⚠️  发现可疑计划任务")
+		fmt.Println(t("  ⚠️  Suspicious tasks found", "  ⚠️  发现可疑计划任务"))
 		findingsCount++
 		writeLog("## ⚠️ 离线检查 - 可疑计划任务")
 		writeCode(schTasks)
 	} else {
-		fmt.Println("  ✅ 未发现可疑计划任务")
+		fmt.Println(t("  ✅ No suspicious tasks", "  ✅ 未发现可疑计划任务"))
 	}
 
 	// 4. 检查启动项
-	fmt.Println("[4/8] 检查启动项...")
+	fmt.Println(t("[4/8] Checking startup items...", "[4/8] 检查启动项..."))
 	startupItems := execCommand("wmic", "startup", "list", "full")
 	if len(strings.TrimSpace(startupItems)) > 100 {
-		fmt.Println("  ⚠️  发现启动项:")
+		fmt.Println(t("  ⚠️  Startup items found:", "  ⚠️  发现启动项:"))
 		fmt.Println(startupItems)
 		findingsCount++
 		writeLog("## ⚠️ 离线检查 - 启动项")
 		writeCode(startupItems)
 	} else {
-		fmt.Println("  ✅ 未发现异常启动项")
+		fmt.Println(t("  ✅ No abnormal startup items", "  ✅ 未发现异常启动项"))
 	}
 
 	// 5. 检查异常服务
-	fmt.Println("[5/8] 检查异常服务...")
+	fmt.Println(t("[5/8] Checking abnormal services...", "[5/8] 检查异常服务..."))
 	services := execCommand("sc", "query", "state=", "all")
 	if strings.Contains(services, "powershell") || strings.Contains(services, "cmd") {
-		fmt.Println("  ⚠️  发现可疑服务")
+		fmt.Println(t("  ⚠️  Suspicious services found", "  ⚠️  发现可疑服务"))
 		findingsCount++
 		writeLog("## ⚠️ 离线检查 - 可疑服务")
 		writeCode(services)
 	} else {
-		fmt.Println("  ✅ 未发现可疑服务")
+		fmt.Println(t("  ✅ No suspicious services", "  ✅ 未发现可疑服务"))
 	}
 
 	// 6. 检查注册表持久化
-	fmt.Println("[6/8] 检查注册表持久化...")
+	fmt.Println(t("[6/8] Checking registry persistence...", "[6/8] 检查注册表持久化..."))
 	regKeys := []string{
 		"HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
 		"HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce",
@@ -1698,17 +1715,17 @@ func performOfflineSecurityCheck() {
 		}
 	}
 	if len(regFindings) > 50 {
-		fmt.Println("  ⚠️  发现注册表启动项:")
+		fmt.Println(t("  ⚠️  Registry startup entries found:", "  ⚠️  发现注册表启动项:"))
 		fmt.Println(regFindings)
 		findingsCount++
 		writeLog("## ⚠️ 离线检查 - 注册表持久化")
 		writeCode(regFindings)
 	} else {
-		fmt.Println("  ✅ 未发现异常注册表项")
+		fmt.Println(t("  ✅ No abnormal registry entries", "  ✅ 未发现异常注册表项"))
 	}
 
 	// 7. 检查异常文件
-	fmt.Println("[7/8] 检查临时目录异常文件...")
+	fmt.Println(t("[7/8] Checking temp directories for suspicious files...", "[7/8] 检查临时目录异常文件..."))
 	tempDirs := []string{os.Getenv("TEMP"), os.Getenv("TMP"), "C:\\Windows\\Temp"}
 	var suspiciousFiles []string
 	for _, tempDir := range tempDirs {
@@ -1721,37 +1738,37 @@ func performOfflineSecurityCheck() {
 		}
 	}
 	if len(suspiciousFiles) > 0 {
-		fmt.Println("  ⚠️  发现临时目录中的可疑文件:")
+		fmt.Println(t("  ⚠️  Suspicious files in temp dirs:", "  ⚠️  发现临时目录中的可疑文件:"))
 		fmt.Println(strings.Join(suspiciousFiles, "\n"))
 		findingsCount++
 		writeLog("## ⚠️ 离线检查 - 临时目录文件")
 		writeCode(strings.Join(suspiciousFiles, "\n"))
 	} else {
-		fmt.Println("  ✅ 临时目录未发现可疑文件")
+		fmt.Println(t("  ✅ No suspicious files in temp dirs", "  ✅ 临时目录未发现可疑文件"))
 	}
 
 	// 8. 检查防火墙配置
-	fmt.Println("[8/8] 检查防火墙配置...")
+	fmt.Println(t("[8/8] Checking firewall configuration...", "[8/8] 检查防火墙配置..."))
 	firewall := execCommand("netsh", "advfirewall", "show", "allprofiles", "state")
 	if strings.Contains(firewall, "OFF") {
-		fmt.Println("  ⚠️  防火墙未完全启用")
+		fmt.Println(t("  ⚠️  Firewall not fully enabled", "  ⚠️  防火墙未完全启用"))
 		findingsCount++
 		writeLog("## ⚠️ 离线检查 - 防火墙配置")
 		writeCode(firewall)
 	} else {
-		fmt.Println("  ✅ 防火墙配置正常")
+		fmt.Println(t("  ✅ Firewall configuration normal", "  ✅ 防火墙配置正常"))
 	}
 
 	// 输出总结
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println("                    离线安全检查完成                          ")
+	fmt.Println("                    Offline Security Check Complete                          ")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 	if findingsCount > 0 {
-		fmt.Printf("[警告] 发现 %d 项安全问题，请人工复核\n", findingsCount)
-		fmt.Println("[提示] 详细信息已记录在日志文件中")
+		fmt.Printf("[Warning] Found %d security issues - manual review required\n", findingsCount)
+		fmt.Println(t("[Hint] Details recorded in log file", "[提示] 详细信息已记录在日志文件中"))
 	} else {
-		fmt.Println("[正常] 未发现明显安全问题")
+		fmt.Println(t("[Normal] No obvious security issues", "[正常] 未发现明显安全问题"))
 	}
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 }

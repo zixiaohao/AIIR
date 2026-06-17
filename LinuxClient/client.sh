@@ -8,22 +8,186 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 # ================= 配置区域 =================
 # Server地址（可通过环境变量AIIR_SERVER_URL设置默认值）
-DEFAULT_SERVER_URL="${AIIR_SERVER_URL:-}"
+DEFAULT_SERVER_URL="${AIIR_SERVER_URL:-http://36.212.5.163:8000}"
 SERVER_URL=""
+# ===========================================
+
+# ================= 国际化 / i18n =================
+# UI语言默认英文，报告默认中文
+UI_LANG="en"
+REPORT_LANG="zh"
+
+# 解析 --lang 参数
+for arg in "$@"; do
+    case "$arg" in
+        --lang=*) UI_LANG="${arg#*=}" ;;
+        --lang) shift; UI_LANG="$1" ;;
+    esac
+done
+# 重新设置位置参数（移除已解析的参数）
+set --
+
+# 翻译函数: _T <key> [en_text] [zh_text]
+# 使用索引方式: keys数组和两个语言数组并行
+_T() {
+    local key="$1"
+    if [ "$UI_LANG" = "zh" ]; then
+        case "$key" in
+            "need_root") echo "请使用root权限运行此脚本！" ;;
+            "no_busybox") echo "busybox 文件不在当前目录中，为了脚本兼容性，建议放置 busybox！" ;;
+            "try_system_cmd") echo "尝试使用系统默认命令..." ;;
+            "no_vuln") echo "vuln 文件不在当前目录中 (可选功能受到限制)" ;;
+            "input_ticket") echo "请输入工单号(用于文件名):" ;;
+            "input_empty") echo "输入不能为空！" ;;
+            "info_collect_start") echo "================开始信息收集================" ;;
+            "info_collect_end") echo "================信息收集完成================" ;;
+            "log_saved_to") echo "日志已保存至: $2" ;;
+            "send_to_server") echo "================发送数据到Server进行AI分析================" ;;
+            "no_curl_skip") echo "[提示] 系统未安装curl，已跳过AI分析" ;;
+            "log_saved_local") echo "[提示] 系统信息已保存至本地日志文件" ;;
+            "log_file_label") echo "[日志文件] $2" ;;
+            "check_network") echo "请检查网络连接或联系安全团队处理日志文件" ;;
+            "press_any_key") echo "按任意键退出..." ;;
+            "server_addr_preset") echo "[Server地址] $2 (已预置)" ;;
+            "input_server_addr") echo "请输入Server地址 (格式: http://IP:端口): " ;;
+            "server_addr_empty") echo "[错误] Server地址不能为空！" ;;
+            "server_addr_label") echo "[Server地址] $2" ;;
+            "conn_test_label") echo "[连接测试] " ;;
+            "conn_success") echo "✅ 成功" ;;
+            "conn_fail") echo "❌ 失败" ;;
+            "conn_error") echo "[错误] 无法连接到Server: $2" ;;
+            "conn_hint") echo "[提示] 网络连接失败或Server未启动" ;;
+            "offline_title") echo "                    ⚠️ 网络连接失败                            " ;;
+            "offline_hint") echo "[提示] 无法连接到Server，正在进行离线安全检查..." ;;
+            "offline_check_label") echo "正在执行离线安全检查..." ;;
+            "offline_complete") echo "                    离线安全检查完成                          " ;;
+            "sending_data") echo "正在发送数据到Server进行分析..." ;;
+            "ai_mode") echo "[AI模式] 一次性全量分析（含自动修复命令）" ;;
+            "analysis_done") echo "分析完成！" ;;
+            "report_header") echo "         AI 安全应急响应分析报告          " ;;
+            "report_saved") echo "报告已保存至: $2" ;;
+            "download_links_header") echo "================📥 文件下载短链接（12小时有效）================" ;;
+            "download_log") echo "  📄 原始日志: $2" ;;
+            "download_report") echo "  📊 分析报告: $2" ;;
+            "download_pending") echo "  (文件上传中，下载链接生成中...)" ;;
+            "download_footer") echo "==============================================================" ;;
+            "exec_actions_title") echo "         🛠️  自动修复操作建议              " ;;
+            "exec_actions_info") echo "[信息] AI分析了 $2 条可执行的修复操作" ;;
+            "exec_confirm") echo "是否执行自动修复操作？每条操作都会单独确认 (y/n): " ;;
+            "exec_cancelled") echo "[信息] 用户取消执行自动修复操作" ;;
+            "exec_none") echo "[信息] AI分析未发现需要自动修复的问题" ;;
+            "analysis_failed") echo "分析失败: $2" ;;
+            "vuln_scan_title") echo "================后续操作：本地漏洞扫描================" ;;
+            "vuln_scan_prompt") echo "数据传输流程已结束。是否继续执行本地漏洞扫描 (vuln)? (y/n): " ;;
+            "vuln_scanning") echo "正在执行漏洞扫描，这可能需要一些时间，请稍候..." ;;
+            "vuln_done") echo "漏洞扫描结束，结果已追加至日志文件。" ;;
+            "vuln_not_found") echo "错误：未在当前目录找到 'vuln' 可执行文件，无法执行扫描。" ;;
+            "vuln_skip") echo "跳过漏洞扫描。" ;;
+            "client_done") echo "Client端执行完毕" ;;
+            "client_note") echo "注意: 本脚本不保留任何密钥数据" ;;
+            "client_sensitive") echo "所有敏感信息已由Server端处理" ;;
+            "offline_proc_check") echo "[1/8] 检查可疑进程..." ;;
+            "offline_net_check") echo "[2/8] 检查异常网络连接..." ;;
+            "offline_suid_check") echo "[3/8] 检查SUID/SGID文件..." ;;
+            "offline_exec_check") echo "[4/8] 检查最近修改的可执行文件..." ;;
+            "offline_cron_check") echo "[5/8] 检查异常定时任务..." ;;
+            "offline_user_check") echo "[6/8] 检查异常用户..." ;;
+            "offline_ssh_check") echo "[7/8] 检查SSH配置..." ;;
+            "offline_perm_check") echo "[8/8] 检查关键文件权限..." ;;
+            "offline_warn") echo "  ⚠️  $2" ;;
+            "offline_ok") echo "  ✅ $2" ;;
+            "offline_warn_findings") echo "[警告] 发现 $2 项安全问题，请人工复核" ;;
+            "offline_detail_hint") echo "[提示] 详细信息已记录在日志文件中" ;;
+            "offline_normal") echo "[正常] 未发现明显安全问题" ;;
+            *) echo "$key" ;;
+        esac
+    else
+        # 英文默认
+        case "$key" in
+            "need_root") echo "Please run this script with root privileges!" ;;
+            "no_busybox") echo "busybox not found in current directory. For script compatibility, placing busybox is recommended!" ;;
+            "try_system_cmd") echo "Trying system default commands..." ;;
+            "no_vuln") echo "vuln file not found in current directory (optional feature limited)" ;;
+            "input_ticket") echo "Please enter ticket ID (for filename):" ;;
+            "input_empty") echo "Input cannot be empty!" ;;
+            "info_collect_start") echo "================Start Information Collection================" ;;
+            "info_collect_end") echo "================Information Collection Complete================" ;;
+            "log_saved_to") echo "Log saved to: $2" ;;
+            "send_to_server") echo "================Sending data to Server for AI analysis================" ;;
+            "no_curl_skip") echo "[Hint] curl is not installed, AI analysis skipped" ;;
+            "log_saved_local") echo "[Hint] System information saved to local log file" ;;
+            "log_file_label") echo "[Log file] $2" ;;
+            "check_network") echo "Please check network connection or contact security team to handle log file" ;;
+            "press_any_key") echo "Press any key to exit..." ;;
+            "server_addr_preset") echo "[Server address] $2 (pre-configured)" ;;
+            "input_server_addr") echo "Please enter Server address (format: http://IP:port): " ;;
+            "server_addr_empty") echo "[Error] Server address cannot be empty!" ;;
+            "server_addr_label") echo "[Server address] $2" ;;
+            "conn_test_label") echo "[Connection test] " ;;
+            "conn_success") echo "✅ Connected" ;;
+            "conn_fail") echo "❌ Failed" ;;
+            "conn_error") echo "[Error] Cannot connect to Server: $2" ;;
+            "conn_hint") echo "[Hint] Network connection failed or Server is not running" ;;
+            "offline_title") echo "                    ⚠️ Network Connection Failed                            " ;;
+            "offline_hint") echo "[Hint] Cannot connect to Server, performing offline security check..." ;;
+            "offline_check_label") echo "Performing offline security check..." ;;
+            "offline_complete") echo "                    Offline Security Check Complete                          " ;;
+            "sending_data") echo "Sending data to Server for analysis..." ;;
+            "ai_mode") echo "[AI Mode] One-shot full analysis (with auto-repair commands)" ;;
+            "analysis_done") echo "Analysis complete!" ;;
+            "report_header") echo "         AI Security Emergency Response Analysis Report          " ;;
+            "report_saved") echo "Report saved to: $2" ;;
+            "download_links_header") echo "================📥 File Download Links (12h valid)================" ;;
+            "download_log") echo "  📄 Raw log: $2" ;;
+            "download_report") echo "  📊 Analysis report: $2" ;;
+            "download_pending") echo "  (File upload in progress, download link generating...)" ;;
+            "download_footer") echo "==============================================================" ;;
+            "exec_actions_title") echo "         🛠️  Auto-Repair Action Suggestions              " ;;
+            "exec_actions_info") echo "[Info] AI analyzed $2 executable repair actions" ;;
+            "exec_confirm") echo "Execute auto-repair actions? Each action will be confirmed individually (y/n): " ;;
+            "exec_cancelled") echo "[Info] User cancelled auto-repair execution" ;;
+            "exec_none") echo "[Info] AI analysis found no issues requiring auto-repair" ;;
+            "analysis_failed") echo "Analysis failed: $2" ;;
+            "vuln_scan_title") echo "================Optional: Local Vulnerability Scan================" ;;
+            "vuln_scan_prompt") echo "Data transfer complete. Continue with local vulnerability scan (vuln)? (y/n): " ;;
+            "vuln_scanning") echo "Running vulnerability scan, this may take some time, please wait..." ;;
+            "vuln_done") echo "Vulnerability scan complete, results appended to log file." ;;
+            "vuln_not_found") echo "Error: 'vuln' executable not found in current directory, cannot perform scan." ;;
+            "vuln_skip") echo "Skipping vulnerability scan." ;;
+            "client_done") echo "Client execution complete" ;;
+            "client_note") echo "Note: This script does not retain any key data" ;;
+            "client_sensitive") echo "All sensitive information has been processed by the Server" ;;
+            "offline_proc_check") echo "[1/8] Checking suspicious processes..." ;;
+            "offline_net_check") echo "[2/8] Checking abnormal network connections..." ;;
+            "offline_suid_check") echo "[3/8] Checking SUID/SGID files..." ;;
+            "offline_exec_check") echo "[4/8] Checking recently modified executables..." ;;
+            "offline_cron_check") echo "[5/8] Checking abnormal cron jobs..." ;;
+            "offline_user_check") echo "[6/8] Checking abnormal users..." ;;
+            "offline_ssh_check") echo "[7/8] Checking SSH configuration..." ;;
+            "offline_perm_check") echo "[8/8] Checking critical file permissions..." ;;
+            "offline_warn") echo "  ⚠️  $2" ;;
+            "offline_ok") echo "  ✅ $2" ;;
+            "offline_warn_findings") echo "[Warning] Found $2 security issues, manual review required" ;;
+            "offline_detail_hint") echo "[Hint] Details recorded in log file" ;;
+            "offline_normal") echo "[Normal] No obvious security issues found" ;;
+            *) echo "$key" ;;
+        esac
+    fi
+}
 # ===========================================
 
 # Linux格式转换建议: dos2unix client.sh
 
 # 检查是否具有root权限
 if [ "$(id -u)" -ne 0 ]; then
-  echo "请使用root权限运行此脚本！"
+  _T "need_root"
   exit 1
 fi
 
 # 检查 busybox 是否在当前目录中并赋予执行权限
 if [ ! -f "./busybox" ]; then
-  echo "busybox 文件不在当前目录中，为了脚本兼容性，建议放置 busybox！"
-  echo "尝试使用系统默认命令..."
+  _T "no_busybox"
+  _T "try_system_cmd"
   # 定义兼容函数，如果没有busybox则直接执行命令
   function run_cmd() {
       "$@"
@@ -37,7 +201,7 @@ fi
 
 # 检查 vuln 程序是否存在并赋予执行权限
 if [ ! -f "./vuln" ]; then
-  echo "vuln 文件不在当前目录中 (可选功能受到限制)"
+  _T "no_vuln"
 else
   chmod +x ./vuln
 fi
@@ -48,9 +212,10 @@ hostname=$(run_cmd hostname)
 date=$(run_cmd date +%Y%m%d)
 
 # 提示用户输入工单号/标识
-read -p "请输入工单号(用于文件名):" input_string
+echo -n "$(_T "input_ticket")"
+read input_string
 if [ -z "$input_string" ]; then
-    echo "输入不能为空！"
+    _T "input_empty"
     exit 1
 fi
 filename="${input_string}_log.md"
@@ -70,7 +235,7 @@ print_code() {
 # 反弹shell关键词
 KEYWORDS='(tftp\s-i|scp\s|sftp\s|bash\s-i|nc\s-e|sh\s-i|wget\s|curl\s|\bexec|/dev/tcp/|/dev/udp/|useradd|groupadd|chattr|fsockopen|socat|base64|socket|perl|openssl)'
 
-echo "================开始信息收集================"
+_T "info_collect_start"
 
 ### 1.系统基础信息 ###
 print_msg "## 系统基础信息"
@@ -222,22 +387,23 @@ print_msg "## 最近登录成功记录"
 print_code "$(grep "Accepted " /var/log/secure /var/log/auth.log 2>/dev/null | tail -n 20)"
 
 echo ""
-echo "================信息收集完成================"
-echo "日志已保存至: $filename"
+_T "info_collect_end"
+_T "log_saved_to" "$filename"
 
 # =========================================================
 #                   发送数据到Server - 一次性发送
 # =========================================================
-echo -e "\n================发送数据到Server进行AI分析================"
+echo ""
+_T "send_to_server"
 
 # 检查curl是否可用
 if ! command -v curl &> /dev/null; then
-  echo "[提示] 系统未安装curl，已跳过AI分析"
-  echo "[提示] 系统信息已保存至本地日志文件"
-  echo "[日志文件] $filename"
+  _T "no_curl_skip"
+  _T "log_saved_local"
+  _T "log_file_label" "$filename"
   echo ""
-  echo "请检查网络连接或联系安全团队处理日志文件"
-  echo "按任意键退出..."
+  _T "check_network"
+  _T "press_any_key"
   read
   exit 0
 fi
@@ -247,13 +413,14 @@ if [ -z "$SERVER_URL" ]; then
     if [ -n "$DEFAULT_SERVER_URL" ]; then
         # 预置地址，自动使用，跳过输入
         SERVER_URL="$DEFAULT_SERVER_URL"
-        echo "[Server地址] ${SERVER_URL} (已预置)"
+        _T "server_addr_preset" "${SERVER_URL}"
     else
-        read -p "请输入Server地址 (格式: http://IP:端口): " input_server
+        echo -n "$(_T "input_server_addr")"
+        read input_server
         SERVER_URL=$(echo "$input_server" | tr -d ' \n\r')
         if [ -z "$SERVER_URL" ]; then
-            echo "[错误] Server地址不能为空！"
-            echo "按任意键退出..."
+            _T "server_addr_empty"
+            _T "press_any_key"
             read
             exit 1
         fi
@@ -261,22 +428,22 @@ if [ -z "$SERVER_URL" ]; then
             http://*|https://*) ;;
             *) SERVER_URL="http://$SERVER_URL" ;;
         esac
-        echo "[Server地址] ${SERVER_URL}"
+        _T "server_addr_label" "${SERVER_URL}"
     fi
     echo ""
 fi
 
 # 检查Server连接
 server_connected=false
-echo -n "[连接测试] "
+echo -n "$(_T "conn_test_label")"
 if curl -s --connect-timeout 5 "${SERVER_URL}/health" > /dev/null 2>&1; then
-    echo "✅ 成功"
-    echo "[Server地址] ${SERVER_URL}"
+    _T "conn_success"
+    _T "server_addr_label" "${SERVER_URL}"
     server_connected=true
 else
-    echo "❌ 失败"
-    echo "[错误] 无法连接到Server: ${SERVER_URL}"
-    echo "[提示] 网络连接失败或Server未启动"
+    _T "conn_fail"
+    _T "conn_error" "${SERVER_URL}"
+    _T "conn_hint"
     server_connected=false
 fi
 echo ""
@@ -284,9 +451,9 @@ echo ""
 # 如果Server连接失败，进行离线安全检查
 if [ "$server_connected" = false ]; then
     echo "═══════════════════════════════════════════════════════════════"
-    echo "                    ⚠️ 网络连接失败                            "
+    _T "offline_title"
     echo "═══════════════════════════════════════════════════════════════"
-    echo "[提示] 无法连接到Server，正在进行离线安全检查..."
+    _T "offline_hint"
     echo ""
     
     # 执行离线安全检查
@@ -294,12 +461,12 @@ if [ "$server_connected" = false ]; then
     
     echo ""
     echo "═══════════════════════════════════════════════════════════════"
-    echo "[提示] 系统信息已保存至本地日志文件"
-    echo "[日志文件] $filename"
+    _T "log_saved_local"
+    _T "log_file_label" "$filename"
     echo "═══════════════════════════════════════════════════════════════"
     echo ""
-    echo "请检查网络连接或联系安全团队处理日志文件"
-    echo "按任意键退出..."
+    _T "check_network"
+    _T "press_any_key"
     read
     exit 0
 fi
@@ -308,13 +475,13 @@ fi
 ip_info="${internal_ip} / ${public_ip}"
 
 # 一次性发送所有数据
-echo "正在发送数据到Server进行分析..."
+_T "sending_data"
 
 # 读取日志内容
 log_content=$(cat "$filename")
 
 # 发送完整日志到Server（使用 /analyze 接口 - 一次性全量分析含自动修复命令）
-echo "[AI模式] 一次性全量分析（含自动修复命令）"
+_T "ai_mode"
 response=$(curl -s -X POST "${SERVER_URL}/analyze" \
   -H "Content-Type: application/json" \
   -d "{
@@ -322,6 +489,7 @@ response=$(curl -s -X POST "${SERVER_URL}/analyze" \
     \"hostname\": \"${hostname}\",
     \"ip_info\": \"${ip_info}\",
     \"platform\": \"linux\",
+    \"lang\": \"${REPORT_LANG}\",
     \"log_content\": $(echo "$log_content" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo "\"$log_content\"")
   }" 2>&1)
 
@@ -330,7 +498,7 @@ if command -v python3 &> /dev/null; then
     success=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('success', False))" 2>/dev/null)
     
     if [ "$success" = "True" ]; then
-        echo "分析完成！"
+        _T "analysis_done"
         
         # 保存分析报告到本地
         analysis_file="${input_string}_analysis_report.md"
@@ -345,27 +513,27 @@ with open(os.environ['ANALYSIS_FILE'], 'w', encoding='utf-8') as f:
         # 显示报告
         echo ""
         echo "=========================================="
-        echo "         AI 安全应急响应分析报告          "
+        _T "report_header"
         echo "=========================================="
         cat "$analysis_file"
         echo "=========================================="
-        echo "报告已保存至: $analysis_file"
+        _T "report_saved" "$analysis_file"
         
         # =========================================================
         #  显示Server自动生成的下载短链接（12小时有效）
         # =========================================================
         echo ""
-        echo "================📥 文件下载短链接（12小时有效）================"
+        _T "download_links_header"
         log_url=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('log_download_url',''))" 2>/dev/null)
         analysis_url=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('analysis_download_url',''))" 2>/dev/null)
         if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
-            echo "  📄 原始日志: $log_url"
+            _T "download_log" "$log_url"
         fi
         if [ -n "$analysis_url" ] && [ "$analysis_url" != "None" ]; then
-            echo "  📊 分析报告: $analysis_url"
+            _T "download_report" "$analysis_url"
         fi
         if [ -z "$log_url" ] || [ "$log_url" = "None" ]; then
-            echo "  (文件上传中，下载链接生成中...)"
+            _T "download_pending"
         fi
         echo "=============================================================="
         
@@ -512,29 +680,30 @@ print(json.dumps(actions))
         # =========================================================
         echo ""
         echo "=========================================="
-        echo "         🛠️  自动修复操作建议              "
+        _T "exec_actions_title"
         echo "=========================================="
         
         actions_count=$(echo "$response" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('actions', [])))" 2>/dev/null || echo "0")
         
         if [ -n "$actions_count" ] && [ "$actions_count" != "0" ]; then
-            echo "[信息] AI分析了 $actions_count 条可执行的修复操作"
+            _T "exec_actions_info" "$actions_count"
             echo ""
-            read -p "是否执行自动修复操作？每条操作都会单独确认 (y/n): " execute_actions
+            echo -n "$(_T "exec_confirm")"
+            read execute_actions
             
             if [[ "$execute_actions" == "y" || "$execute_actions" == "Y" || "$execute_actions" == "yes" || "$execute_actions" == "YES" ]]; then
                 _exec_actions_inline "$response"
             else
-                echo "[信息] 用户取消执行自动修复操作"
+                _T "exec_cancelled"
             fi
         else
-            echo "[信息] AI分析未发现需要自动修复的问题"
+            _T "exec_none"
         fi
         
         echo ""
     else
         error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', '未知错误'))" 2>/dev/null)
-        echo "分析失败: $error"
+        _T "analysis_failed" "$error"
     fi
 else
     echo "Server响应:"
@@ -544,13 +713,15 @@ fi
 # =========================================================
 #             后续可选操作：本地漏洞扫描
 # =========================================================
-echo -e "\n================后续操作：本地漏洞扫描================"
-read -p "数据传输流程已结束。是否继续执行本地漏洞扫描 (vuln)? (y/n): " run_vuln
+echo ""
+_T "vuln_scan_title"
+echo -n "$(_T "vuln_scan_prompt")"
+read run_vuln
 
 if [[ "$run_vuln" == "y" || "$run_vuln" == "Y" ]]; then
     if [ -f "./vuln" ]; then
         print_msg "## 本地漏洞扫描结果"
-        echo "正在执行漏洞扫描，这可能需要一些时间，请稍候..."
+        _T "vuln_scanning"
         
         # 执行扫描
         vuln_out=$(./vuln scan -all 2>&1 | grep 'INFO' | head -n 50)
